@@ -267,7 +267,7 @@ real*8 :: mymaxval
   urv=1.0d0/rv
 
   !THIS IS JUST FOR CLARITY, TO SIMPLIFY EACH SUBROUTINE AND MAKE IT MORE READEABLE 
-  if (ffu(9)==0) then              !!>> HC 14-1-2021
+  if (ffu(9)==0.or.ffu(9)>1) then              !!>> HC 14-1-2021
      if (ffu(8)==0) then !normal neighboring, extensive search of the boxes
         if (ffu(2)==0) then
            if (ffu(23)==1) then        !!>> HC 14-1-2021
@@ -294,8 +294,8 @@ real*8 :: mymaxval
               end if    
            end if
         else
-          print *,"SORRY,..., GABRIEL IS NOT IMPLEMENTED WITH THOSE FFUs, BUT IT IS EASY TO DO IF YOU WANT"
-          stop
+          call neighbor_build_complete_gabriel  !!AL 1-4-25
+          !stop                                 !!AL 1-4-25
         end if
      else
         urv=1.0d0/(rv+1d-3)
@@ -332,7 +332,7 @@ subroutine neighbor_build_node_pola(i)
   urv=1.0d0/a
 
   !THIS IS JUST FOR CLARITY, TO SIMPLIFY EACH SUBROUTINE AND MAKE IT MORE READEABLE 
-  if (ffu(9)==0) then        !!>> HC 14-1-2021
+  if (ffu(9)==0.or.ffu(9)>1) then        !!>> HC 14-1-2021
     if (ffu(8)==0) then !normal neighboring, extensive search of the boxes
       if (ffu(2)==0) then
         if (ffu(23)==1) then  !!>> HC 14-1-2021

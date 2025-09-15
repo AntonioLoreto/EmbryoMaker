@@ -1,5 +1,3 @@
-
-
 program fitness
 
   use general
@@ -11,13 +9,12 @@ program fitness
   use fitmo
   use mutation
 
-
   implicit none
   character*400 onetwin, parfile, rangfile !!>> HC 6-10-2021
   character*300 cx
   real*8 fitelli, prevfit, emd  !!>> HC 30-6-2023
-  integer :: ich
-  integer, allocatable, dimension(:) :: effu
+  integer :: ich, volumen !!>> AL 13-3-2024
+  integer, allocatable, dimension(:) :: effu, volumenes
   call getarg(1,onetwin)
   call getarg(2,parfile)
   call getarg(3,rangfile) !!>> HC 6-10-2021
@@ -25,8 +22,6 @@ program fitness
   call readsnap(onetwin)           !!>> HC 17-11-2020 we read the individual
   call neighbor_build              !!>> HC 17-11-2020
   call read_elli_evaparam(parfile, effu) !!>> HC 17-11-2020 we read the parfile to know whether there is a target or not
-  
-  
  
   if (len_trim(tarfitmorphfile)>1)then                       !!>> HC 17-11-2020  If we have stated some Target file
       call fit(0,fitelli,emd,onetwin,tarfitmorphfile)        !!>> HC 30-6-2023   we calculate the EMD distance to that target
@@ -83,18 +78,21 @@ program fitness
       if (effu(8)==1) call flux_half_increase_half_decrease(fitelli)            !!>> HC 12-5-2022  half decrease halv increase flux resistance (untested)
       if (effu(9)==1) call curvature_patch_count(fitelli)                       !!>> HC 12-5-2022  Patches of cells with the same curvature (untested)
       if (effu(10)==1) call directional_selection(fitelli)                      !!>> HC 18-2-2024  Directional selection (works)
+      if (effu(11)==1) call complexity(fitelli, volumenes)                      !!>> AL 12-3-2024
+      if (effu(12)==1) call traits_with_proyections_CS(fitelli)                 !!>> AL 7-3-2025
       
-          !!!OUTPUT!!!
+      !!!OUTPUT!!!
       if (effu(1)==0)then
          open(202,file="individual.datfitness")                              !!>> HC 11-11-2021 WRITING OUTPUT
-         write(202,*) fitelli                                                !!>> HC 11-11-2021
+           write(202,*) fitelli                                              !!>> HC 11-11-2021
          close(202)                                                          !!>> HC 11-11-2021
-         open(203,file="OPC.val")                                            !!>> HC 11-11-2021
-         write(203,*) fitelli                                                !!>> HC 11-11-2021
+         open(203,file="OPC.val")                                            !!>> HC 11-11-2021 !!>> AL 7-3-2025 erease
+           write(203,*) fitelli                                              !!>> HC 11-11-2021
          close(203)   
+        !open(203, position="append",file="volumenes.val")                    !!>> AL 13-3-2024
+        ! write(203,*) volumenes(1),volumenes(2),volumenes(3)                                         
+        !close(203)
       endif
   endif
-
-
 
 end program fitness

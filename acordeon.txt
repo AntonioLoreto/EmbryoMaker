@@ -1,0 +1,49 @@
+Nomeclature of output_model.dat
+
+NC      -> File not created, this applies for volume, robustness measure or
+developmenal_time
+LTLD    -> individual was filtrated (something went wrong) during development. This means there was a individual.datfitness created during the development part. 
+INVMU   -> after mutation, the file inviable.e was created, which means
+mutation was not viable
+NOD     -> Development was not runned for whatever reason
+NA      -> Individual was not integrated in populatio because fitness was less
+that least fit individual at the time.
+I also have NA for volume beacuse in proyection fitness function you do not
+evaluate volume. This is problematic with reconstruction of ancestry. 
+
+inviable.e means that the mutation either eliminated the gene network (by a deletion on a 1 gene network)
+or that none of the genes are transcribable (all are kindof>2)
+
+kindof == -1 means it is a ghost gene
+
+recombination_history.txt nomenclature: 
+# [number of recombination]
+[number of genes recombined in this event]
+[gen number, i] gene(i)%t(:)
+[gen number, i] gene(i)%e(:)
+[gen number, i] gen(ihc)%diffu  gen(ihc)%mu  gen(ihc)%mich  gen(ihc)%kindof  	
+
+mutacode nomenclature:
+0 = no mutation
+1 = degradetion rate
+2 = diffusion rate
+3 = michaelis-menten constant
+4 = either a Topology change or IS mutation in matrix T (you can determine one or other looking at the prevalue and newvalue, if 0 and diff 0 or diff 0 and 0 then it was a Topology change)
+5 = ceither a Topology change or IS mutation in matrix E (you can determine one or other looking at the prevalue and newvalue, if 0 and diff 0 or diff 0 and 0 then it was a Topology change)
+!6 = nww matrix			!AL 9-12-24: this is commented. It might bring problems in the future...
+!7 =  kadh matrix
+7 = deletion,duplication
+8 = recombination
+
+mutacodehis.dat nomenclature:
+ich,mutacode, mutageni, mutagenj, prevalue, newvalue,runornot,pcpval 
+
+! kindofmuta = -1 recombination
+! kindofmuta = 0 no mutation
+! kindofmuta = 1 all IS mutations
+! kindofmuta = 2 at least 1 T mutation in T matrix
+! kindofmuta = 3 at least 1 T mutation in E matrix
+! kindofmuta = 4 at least 1 del
+! kindofmuta = 5 at least 1 dup
+! kindofmuta = 6 muta in non functional part
+

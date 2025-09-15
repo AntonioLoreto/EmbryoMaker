@@ -1453,8 +1453,7 @@ subroutine suremuta_no_kadh(limit, inviable,mind,mutacode,mutageni,mutagenj,prev
   real*8, dimension (1:5) :: min_glim, max_glim                                  !!>>HC 6-10-2021
   real*8 :: t_mag !!>> HC 31-5-2023 Magnitude of the initial value in T mutations (should be a free parameter)
   
-  !!!!!!!!!!!!!!!!!!!!!!! LIMITS AND RANGES !!!!!!!!!!!!!!!!!!!!!!! 
-                   
+  !************************** LIMITS AND RANGES **************************!        
   limit=1                                               !!>> HC 27-11-2020 if limit stays in 1 no limits have been surpased if =0, we will repeat mutation
   rembeh=0; max_elim=0.0d0; min_elim=0.0d0              !!>> HC 6-10-2020 These vectors will store the max and min values of activation of cell properties and behaviors
   max_glim=0.0d0; min_glim=0.0d0                        !!>> HC 6-10-2020 Same for other gene properties 
@@ -1466,14 +1465,13 @@ subroutine suremuta_no_kadh(limit, inviable,mind,mutacode,mutageni,mutagenj,prev
   w_max=max_glim(4)    ; w_min=min_glim(4)                       !!>> HC 27-11-2020 Limits for transcription factors from Hagolani et al. 2020
   b_max=max_glim(5)    ; b_min=min_glim(5)                       !!>> HC 27-11-2020 Limits for specific adhesion (kadh AKA b matrix)
 
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- 
+  !************************************************************************!
   if (allocated(dupi)) deallocate(dupi)
   if (allocated(father_son)) deallocate(father_son)
   if (allocated(todel)) deallocate(todel)
   allocate(dupi(ng*ng))       !since each gene can no duplicate more than ng times per mutation round
   allocate(father_son(ng*ng)) !since each gene can no duplicate more than ng times per mutation round
-  allocate(todel(ng*ng*10))
+  allocate(todel(ng*ng*10))   !!>>AL 9-4-24: why not only ng*ng..?
   dupi=0
   father_son=0
   todel=0
@@ -1485,7 +1483,7 @@ subroutine suremuta_no_kadh(limit, inviable,mind,mutacode,mutageni,mutagenj,prev
   prevalue=0.0d0              !!>> HC 29-11-2021
   newvalue=0.0d0              !!>> HC 29-11-2021
   t_mag=0.10d0                !!>> HC 31-5-2023
-  call random_number(bhc)     !!>> HC 25-11-2020 THESE ARE BIASED I DO NOT KNOW WHY
+  call random_number(bhc)     !!>> HC 25-11-2020 THESE ARE BIASED I DO NOT KNOW WHY !!>>AL 5-4-24 chechar si estan sesgados realmente o no
   if (mind==1)then                                        !!>> HC 25-11-2020 !!!!!!!!!!!!!!!!!!!!! IS MUTATIONS!!!!!!!!!!!!!!!!!!!!!
      nume=0; numt=0; numk=0; numr=0                       !!>> HC 25-11-2020 
      do ich=1,ng                                          !!>> HC 25-11-2020 
@@ -2409,7 +2407,7 @@ subroutine deletion(i)
   todel=0
   todel(i)=1
   call follow_to_the_end_del(last)
-  ang=ng
+  ang=ng    !!>>AL 9-4-24: no idea what ang does...
   do j=ng,1,-1
     if (todel(j)==1) then ; if (ng>1) then ; call del(j) ; else ; return ;  end if ; end if
   end do
@@ -2640,15 +2638,5 @@ do ii=1,ng;!print*,"ii",ii
 enddo
 
 end subroutine limits
-
-
-
-
-
-
-
-
-
-
 
 end module

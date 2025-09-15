@@ -57,12 +57,41 @@ end subroutine eneinicial
 
 !**************************************************************************
 subroutine prints
+real*8 a,b
+integer i,j,k,imax,imin
 !print *,"getot",getot,"real time",rtime,"nd",nd,"delta",delta,"deltamin",deltamin,node(nd)%x,minval(node(:nd)%dif)," file ",carg,maxval(gex(:,5))
 print *,"getot",getot,"real time",rtime,"nd",nd!," file ",carg,delta,deltamin,cels(1)%fase
 !do i=1,ng
-!  print *,i,maxval(gex(:,i))
+!  print *,i,maxloc(gex(:,i)),maxval(gex(:,i))
 !end do
+! >>> Is 16-9-24
+!if(ffu(32)==1) then
+  print *,maxloc(node(:nd-2)%pld),maxval(node(:nd-2)%pld),minloc(node(:nd-2)%pld),minval(node(:nd-2)%pld),"plds"
+  print *,maxloc(node(:nd-2)%cod),maxval(node(:nd-2)%cod),minloc(node(:nd-2)%cod),minval(node(:nd-2)%cod),"cods"  
+  print *,maxcod*orival_apical,mincod*orival_apical,"orival_apical"    
+  print *,maxcod*orival_basal,mincod*orival_basal,"orival_basal"      
+  print *,maxval(nodeo(:)%eqd),minval(nodeo(:)%eqd),"nodeo"
+  print *,maxval(node(:)%eqd),minval(node(:)%eqd),"eqd"  
+  print *,orival_apical,orival_basal,orival_other,"orivals"
+!  print *,maxloc(ilastdiv),maxval(ilastdiv),minloc(ilastdiv),minval(ilastdiv),"ilastdiv"  
+!end if
+a=0
+b=1000000
+do i=1,nd
+  if (ilastdiv(i)>60) then
+    if (node(i)%eqd>a) then
+      a=node(i)%eqd
+      imax=i
+    end if
+    if (node(i)%eqd<b) then
+      b=node(i)%eqd
+      imin=i
+    end if    
+  end if
+end do
+print *,a,imax,b,imin,"eqds"
 
+! <<< Is 16-9-24
 end subroutine prints
 
 !**************************************************************************
@@ -71,25 +100,27 @@ end subroutine prints
 !**************************************************************************
 
 subroutine iteracio(tf)
-integer tf,itf,il,status
+!integer tf,itf,il,status,index,is,js,ks,kks,iis,jjs  ! >>> Is 12-9-24
+integer itf,il,status,index,is,js,ks,kks,iis,jjs  ! >>> Is 12-9-24
+real*8 tf                                            !!AL 20-5-25>> if we use real time this variables should be floats
 real*8::rtf,realtf  !>>>>>>>>>>>Miquel 17-6-13
 integer::cont       !>>>>>>>>>>>Miquel 17-6-13
 real*8::ox,oy,oz !miguel4-1-13
-real*8::rad,nrad,ax,ay,az
+real*8::rad,nrad,ax,ay,az,a,b,c
+real*8::aa,bb,cc,ps,d,dd     ! >>> Is 12-9-24
 character*200 cxhc  !!>> HC 20-2-2021
 
-  realtf=real(tf)   !>>>>>>>>>>>Miquel 17-6-13
+  !realtf=real(tf)   !>>>>>>>>>>>Miquel 17-6-13
+  realtf=tf         !!AL 20-5-25>> if we use real time this variables should be floats
   rtf=0d0           !>>>>>>>>>>>Miquel 17-6-13
   cont=0            !>>>>>>>>>>>Miquel 17-6-13
   geu=0
   itf=0
 
-
   if(getot.eq.0)then                                        !>>>Miguel29-10-14
     lock=0 ! matrices gext are filled by default            !>>>Miguel29-10-14
     if((aut.ne.1).and.(aut.ne.5))then;call printgex1;endif  !>>>Miguel 8-10-14
   end if                                                    !>>>Miguel29-10-14
-
 
   if (itviactual<itvi) then
     call go_iteration_forth(tf)  !recovers remembered iterations before runing new ones
@@ -100,6 +131,8 @@ character*200 cxhc  !!>> HC 20-2-2021
     getot=getot+1
     geu=geu+1
     itf=itf+1
+    !if (ffu(32)==1) 
+    ilastdiv=ilastdiv+1
 
     !UPDATING CELL CENTROIDS
     do i=1,ncels
@@ -126,8 +159,6 @@ character*200 cxhc  !!>> HC 20-2-2021
       end if
     end if
     if(ffu(24)==0)  call restore_neighbors
-    
-
 
     if(ffu(16)==0)then
       if(ffu(28)==1 .or. npag(nparam_per_node+17) .eq. 0)then
@@ -140,16 +171,16 @@ character*200 cxhc  !!>> HC 20-2-2021
     end if
 
 
-    call gene_stuff    !ffu ensemble
 
-
+    !call gene_stuff    !ffu ensemble
+    
+    call tgene_stuff    !ffu ensemble
+    
     if (ffu(26)==1)then        !!>> HC 15-2-2021 
        call nexe               !!>> HC 15-2-2021  !nexe should be first >>> Is 13-2-14
     else                       !!>> HC 15-2-2021 
        call nexe_gradual       !!>> HC 15-2-2021 Gradual implementation of genetic control of cell properties 
     endif                      !!>> HC 15-2-2021 (it comes from nexe 2 with some 2021 changes)
-  
-    
 
     !UPDATINGS********
     !node positions from forces
@@ -179,7 +210,6 @@ character*200 cxhc  !!>> HC 20-2-2021
     gex(1:nd,1:ng) = agex(1:nd,1:ng)
     where(gex.lt.0) gex=0.0d0
 
-
     !RANDOM NOISE
     if(ffu(16)==0)then
       c=nd*prop_noise*delta/deltamin !now the proportion of nodes is still dynamic, but equal to prop_noise on default  !>>Miquel28-7-14
@@ -199,7 +229,7 @@ character*200 cxhc  !!>> HC 20-2-2021
         call itera
       end do
     end if  
-    
+
     ! WHICHEND 4: TOO MANY NODES 
    ! whichend=0                                                             !!>> HC 26-2-2021 This is already initialized in elli
     if ((ffu(21)==1.and.ffufi(4,1)==1)) then                                !!>> HC 12-7-2021
@@ -256,7 +286,6 @@ character*200 cxhc  !!>> HC 20-2-2021
        stop                                                                 !!>> HC 20-2-2021
     endif                                                                   !!>> HC 20-2-2021
 
-    
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     rtf=rtf+delta
     rtime=rtime+delta
@@ -265,7 +294,8 @@ character*200 cxhc  !!>> HC 20-2-2021
 
     if (mod(getot,fprint)==0 .and. ffu(22)==0) call prints  !!>> HC 30-11-2020 I have added a silent mode 
 
-    if (mod(getot,freqsnap).eq.0) then ; if (fsnap==1) then ;call writesnap; end if ; end if
+    !if (mod(getot,freqsnap).eq.0) then ; if (fsnap==1) then ;call writesnap; end if ; end if
+    if (mod(real(getot),freqsnap).eq.0) then ; if (fsnap==1) then ;call writesnap; end if ; end if !!AL 20-5-25>> if we use real time this variables should be floats
 
     if (mod(getot,100000).eq.0) print *,getot,nd,"getot nd",node(nd)%x
 
@@ -307,7 +337,6 @@ character*200 cxhc  !!>> HC 20-2-2021
 
 
 !  print*,"rtime",rtime,"RTIME",delta,"delta",rtime,"nd",nd,"ncels",ncels
-
   if (itviactual==itvi) then
     itvi=itvi+1
     if (itvi>mamax) itvi=1
@@ -363,7 +392,7 @@ integer   ::nr  !>>> Is 4-3-14
     !desplacament=a*node(nodmo)%dmo
     !a=ran2(idum);
     call random_number(a)
-    if (ffu(9)==1) then                  ! 4-3-2020
+    if (ffu(9)==1) then  ! Is 20-9-23                  ! 4-3-2020
       desplacament=a*node(nodmo)%dmo       ! 4-3-2020
     else                                   ! 4-3-2020
       desplacament=a*node(nodmo)%dmo*delta ! 4-3-2020 THIS ONE IS MORE CORRECT    
@@ -495,7 +524,8 @@ end subroutine itera
 
 !*******************************************SUBROUTINE********************************************************
 subroutine go_iteration_back(it)  !FUNKY MODULE POSITION IT IS CALLED FROM PINTA AND DOES NOT RUN SIMULATION
-  integer it
+  !integer it
+  real*8 it !!AL 20-5-25>> if we use real time this variables should be floats
   itviactual=itviactual-it
   if (itviactual<1) then ; itviactual=1 ; print *,"you've gone too far" ; endif
   call move_iteration(it)
@@ -503,7 +533,8 @@ end subroutine
 
 !*******************************************SUBROUTINE********************************************************
 subroutine go_iteration_forth(it)  !FUNKY MODULE POSITION IT IS CALLED FROM PINTA AND DOES NOT RUN SIMULATION
-  integer it
+  !integer it
+  real*8 it !!AL 20-5-25>> if we use real time this variables should be floats
   itviactual=itviactual+it
   if (itviactual>itvi) then ; itviactual=itvi; print *,"now we are were we were" ; endif
   call move_iteration(it)
@@ -511,6 +542,7 @@ end subroutine
 
 !*******************************************SUBROUTINE********************************************************
 subroutine move_iteration(it)
+  real*8 it !!AL 20-5-25>> if we use real time this variables should be floats
   node(:nd)=pnode(itviactual,:nd)
   param=pparam(itviactual,:)
   varglobal_out=pvarglobal_out(itviactual,:)
@@ -532,6 +564,8 @@ el: do i=1,rang
       do j=k,rang ; if (mt(j)==0) then ; mt(j)=i ; cycle el ; end if ; end do
     end do el 
 end subroutine ordenarepe
+
+!*****************************************************************************************************
 
 subroutine printgex1 !>>>Miguel 8-10-14 made subroutine
 integer :: faktor,col1,col2

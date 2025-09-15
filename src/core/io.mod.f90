@@ -25,7 +25,7 @@ module io
   use general
   use genetic
 
-  character*10000 :: line  !read random seed line
+  character*10000 :: lines  !read random seed line
   integer :: sizeSeed !pfh
   character*12 :: presmich !label used to determine the presence of KM (mich-menten) HC 14-04-20
 
@@ -33,8 +33,8 @@ module io
   real*8 , public, allocatable :: varglobal_out(:),pvarglobal_out(:,:) !maybe fuse with the params
   character*200 , public, allocatable :: names_param(:),names_varglobal_out(:),names_fu(:),names_fi(:) !!>>HC 17-2-2021
   integer, public               :: errorlec             ! it becomes 1 if there was a lecture error
-  integer, public               :: freqsnap             ! frequency of saving data for movies
-
+  !integer, public               :: freqsnap             ! frequency of saving data for movies
+  real*8, public               :: freqsnap             ! frequency of saving data for movies !!AL 20-5-25>> if we use real time this variables should be floats
   !flags
   integer, public               :: fsnap                ! 1 if we are saving files periodically
   integer, public               :: fmovie               ! 1 if we are saving images periodically
@@ -63,28 +63,29 @@ module io
   real*4,public  :: conf_anglex,conf_angley,conf_custom_max,conf_custom_min
   integer :: conf_colorselection,conf_custom_colorselection,conf_rainbow,conf_chogen
   integer :: ic_load
-  integer,dimension(41)::conf_flag !>>Miquel2-10-14 !!>> HC 12-3-2021
+  integer,dimension(45)::conf_flag !>>Miquel2-10-14 !!>> HC 12-3-2021
 
   real*4,public  :: conf_custom_amaxval,conf_custom_aminval,conf_custom_smaxval,conf_custom_sminval  !>>Miquel5-11-14
   real*4,public  :: conf_custom_arrowscale,conf_custom_spherescale                                   !>>Miquel5-11-14
   integer :: conf_arrowselection,conf_custom_arrowselection,conf_sphereselection,conf_custom_sphereselection  !>>Miquel5-11-14
   integer,allocatable::conf_oopp(:) !>>Miquel5-11-14
   integer::conf_select_what,conf_nki !>>Miquel5-11-14
+  integer:: escriu_pattern,escriu_dm
 
 contains
 
 
 
-integer function ntokens(line) result(ntokens2) ! how big is the size of the random seed used in the current file
-character,intent(in):: line*(*)
+integer function ntokens(lines) result(ntokens2) ! how big is the size of the random seed used in the current file
+character,intent(in):: lines*(*)
 integer n, toks
 
 i = 1;
-n = len_trim(line)
+n = len_trim(lines)
 toks = 0
 ntokens2 = 0
 do while(i <= n)
-   do while(line(i:i) == ' ')
+   do while(lines(i:i) == ' ')
      i = i + 1
      if (n < i) return
    enddo
@@ -93,7 +94,7 @@ do while(i <= n)
    do
      i = i + 1
      if (n < i) return
-     if (line(i:i) == ' ') exit
+     if (lines(i:i) == ' ') exit
    enddo
 enddo
 end function ntokens
@@ -166,7 +167,7 @@ subroutine iniread
     character*2  cd
     character*1  cu
 
-    cr="(20es24.16,5I16)"
+    cr="(20es24.16,5I16)" 
     write (cd,'(I2)') nparam_per_noder  !this is funky, I write a text into a character variable that then use as format
     cr(2:3)=cd
     write (cu,'(I1)') nparam_per_nodei
@@ -219,7 +220,7 @@ subroutine iniread
     deltamax=para(17)
     ncels=para(18)
     ng=para(19)
-    !nodecel=para(20)
+    max_change_node_prop=para(20)  !>>> Is 21-7-24
     prop_noise=para(21)
     !khold=para(25)             !>>>Miquel9-1-14
     mnn=para(22)
@@ -236,6 +237,17 @@ subroutine iniread
     maxcycl=para(33) !!>> HC 11-2-2021
     newfase=para(34) !>> HC 14-9-2021
     maxelong=para(35) !>> TT 30-9-2021
+
+    !>>> Is 22-9-24
+    if (nparam>35)  mincod=para(36)
+    if (nparam>36)  maxcod=para(37)    
+    if (nparam>37)  minpld=para(38)
+    if (nparam>38)  maxpld=para(39)
+    if (nparam>39)  minvod=para(40)
+    if (nparam>40)  maxvod=para(41)    
+    if (nparam>41)  mineqd=para(42)
+    if (nparam>42)  maxeqd=para(43)
+    !<<< Is 22-9-24
 
 !    if (allocated(kadh)) deallocate(kadh)       !x>>>>Miquel14-11-13
 !    allocate(kadh(ntipusadh,ntipusadh))
@@ -271,7 +283,7 @@ subroutine iniread
     deltamax=para(17)
     ncels=para(18)
     ng=para(19)
-    !nodecel=para(20)
+    max_change_node_prop=para(20)
     prop_noise=para(21)
     !khold=para(25)           !>>>Miquel9-1-14
     mnn=para(22)
@@ -288,6 +300,17 @@ subroutine iniread
     maxcycl=para(33) !!>> HC 11-2-2021
     newfase=para(34) !>> HC 14-9-2021
     maxelong=para(35) !>> TT 30-9-2021
+
+    !>>> Is 22-9-24
+    if (nparam>35)  mincod=para(36)
+    if (nparam>36)  maxcod=para(37)    
+    if (nparam>37)  minpld=para(38)
+    if (nparam>38)  maxpld=para(39)
+    if (nparam>39)  minvod=para(40)
+    if (nparam>40)  maxvod=para(41)    
+    if (nparam>41)  mineqd=para(42)
+    if (nparam>42)  maxeqd=para(43)
+    !<<< Is 22-9-24
 
 !    if (allocated(kadh)) deallocate(kadh)        !x>>>>Miquel14-11-13
 !    allocate(kadh(ntipusadh,ntipusadh))          !
@@ -336,7 +359,7 @@ subroutine iniread
     para(17)=deltamax
     para(18)=ncels
     para(19)=ng
-    !para(20)=nodecel
+    para(20)=max_change_node_prop
     para(21)=prop_noise
     !para(25)=khold          !>>>Miquel9-1-14
     para(22)=mnn
@@ -353,6 +376,18 @@ subroutine iniread
     para(33)=maxcycl !!>> HC 11-2-2021
     para(34)=newfase !!>> HC 14-9-2021
     para(35)=maxelong !>> TT 30-9-2021
+
+    ! >>> Is 22-9-24
+    if (nparam>35)  para(36)=mincod
+    if (nparam>36)  para(37)=maxcod    
+    if (nparam>37)  para(38)=minpld
+    if (nparam>38)  para(39)=maxpld
+    if (nparam>39)  para(40)=minvod
+    if (nparam>40)  para(41)=maxvod    
+    if (nparam>41)  para(42)=mineqd
+    if (nparam>42)  para(43)=maxeqd
+    ! <<< Is 22-9-24
+
 !    do i=1,ntipusadh
 !      do j=1,ntipusadh
 !        para(25+i+j)=kadh(i,j)
@@ -387,7 +422,7 @@ subroutine iniread
     names_param(17)="M(DMA)       : the maximal dynamic delta allowed: no major effect" 
     names_param(18)="Total number of cells" 
     names_param(19)="Total number of genes" 
-    names_param(20)="nothing"
+    names_param(20)="M(max_change_node_prop) : Biological :maximal change in a node property allowed by unit time"  
     names_param(21)="M(NOI)       : Numerical : proportion of nodes subject to noise per dif eq iteration"
     names_param(22)="M(MNN)       : Numerical  : Maximal number of nodes that can interact with a node: if more then crash"
     names_param(23)="M(EMA)       : Numerical  : Maximal radius a node can have, we do not allow more"
@@ -405,6 +440,24 @@ subroutine iniread
     names_param(34)="M(newfase)   : Maximum value for the cell fase after division" !>> HC 15-9-2021
     names_param(35)="M(maxelong)  : Maximum proportion by which a node is elongated when polarized" !>> TT 30-9-2021
 
+    ! >>> Is 22-9-24
+    if (nparam>35) names_param(36)="M(mincod)   : Biological : minimal value of cod allowed, as a proportion of &
+&    initial eqd, it should be negative"
+    if (nparam>36) names_param(37)="M(maxcod)   : Biological : maximal value of cod allowed, as a proportion of &
+&   initial eqd"
+    if (nparam>37) names_param(38)="M(minpld)   : Biological : minimal value of pld allowed, as a proportion of &
+    & initial eqd, should be negative"
+    if (nparam>38) names_param(39)="M(maxpld)   : Biological : maximal value of pld allowed, as a proportion of &
+    & initial eqd, should be negative" 
+    if (nparam>39) names_param(40)="M(minvod)   : Biological : minimal value of vod allowed, as a proportion of &
+    & initial eqd, should be negative" 
+    if (nparam>40) names_param(41)="M(maxvod)   : Biological : maximal value of vod allowed, as a proportion of &
+    & initial eqd, should be negative" 
+    if (nparam>41) names_param(42)="M(mineqd)   : Biological : global minimal value of eqd allowed, as a proportion&
+    & of initial eqd, should be negative"
+    if (nparam>42) names_param(43)="M(maxeqd)   : Biological : global maximal value of eqd allowed, as a proportion &
+    & of initial eqd, should be negative"
+    ! <<< Is 22-9-24
  
   end subroutine
 
@@ -420,34 +473,47 @@ subroutine iniread
   subroutine s_names_fu
     names_fu=""
     if (nfu>0) names_fu(1)="L1 if 0 treat each spherical node as a cell and each cylinder as a cell"
-    if (nfu>1) names_fu(2)="L2 0 no screening, 1 screening by Gabriel method"
-    if (nfu>2) names_fu(3)="L3 0 there is torsion: scalar product between within cell ellipses, 1 there is no torsion"
+    if (nfu>1) names_fu(2)="L2 if 0 no screening, 1 screening by Gabriel method"
+    if (nfu>2) names_fu(3)="L3 if 0 there is torsion: scalar product between within cell ellipses, 1 there is no torsion"
     if (nfu>3) names_fu(4)="L4 if 1 this forces apoptosis of all the nodes or cells that lose contact with others"
-    if (nfu>4) names_fu(5)="L5 1, for Euler numerical int., 0 for Runge-Kutta order 4 for movement, 2 R-K also for genetics"
-    if (nfu>5) names_fu(6)="L6 epithelial node plastic deformation (1=ON)"
-    if (nfu>6) names_fu(7)="L7 dynamic delta (0) / fixed delta (1)"
-    if (nfu>7) names_fu(8)="L8 neighboring algorithm: exhaustive by %add sphere (0) / by 3D triangulation (1)"
-    if (nfu>8) names_fu(9)="L9 1 for original 2016 version, 0 for 2021 version"
-    if (nfu>9) names_fu(10)="L10 if 0 volume conservation in cylinders"
-    if (nfu>10) names_fu(11)="L11 diffusion of reqcr (1=ON)"
-    if (nfu>11) names_fu(12)="L12 1 for adaptive size step (it uses Runge-Kutta), 2 to make for genetics too"
-    if (nfu>12) names_fu(13)="L13 this allows growth to add more than one node per cell per iteration"
-    if (nfu>13) names_fu(14)="L14 return the control in real time(0) or in real iterations(1), only with dynamic delta"
-    if (nfu>14) names_fu(15)="L15 random noise mode: 1 = biased random noise by energies , 0 = unbiased random noise" !>>Miquel28-7-14
-    if (nfu>15) names_fu(16)="L16 forces by diff. equations: 0 = activated, 1 = disabled (should go by energies)" !>>Miquel28-7-14
-    if (nfu>16) names_fu(17)="L17 if 0 epithelial nodes from one side do not consider as neighbors nodes from the other side" !Not in  PLOS CB version !>>> Is 18-4-15
-                             ! ffu(17)=1 is not the default but it makes the code much faster with equal realism
-    if (nfu>17) names_fu(18)="L18 if 0 makes that single node cells divide gradually by adding a small daughter cell" !Not in  PLOS CB version !>>> Is 18-4-15
+    if (nfu>4) names_fu(5)="L5 if 0 for Runge-Kutta order 4 for movement, if 1 use Euler, 2 R-K also for genetics"
+    if (nfu>5) names_fu(6)="L6 if 1 epithelial node plastic deformation"
+    if (nfu>6) names_fu(7)="L7 if 0 dynamic delta, if 1 fixed delta"
+    if (nfu>7) names_fu(8)="L8 if 1 3D triangulation"
+    if (nfu>8) names_fu(9)="L9 if 0 2021 version, if 1 original 2016 version, not much different" !>>> Is 20-9-24
+    if (nfu>9) names_fu(10)="nothing"
+    if (nfu>10) names_fu(11)="L11 if 1 diffusion of reqcr"
+    if (nfu>11) names_fu(12)="L12 if 0 adaptive size step (it uses Runge-Kutta),if 1 not adaptive, 2 to make for & 
+    &adaptative for the genetics part too"
+    if (nfu>12) names_fu(13)="L13 if 1 this allows growth to add more than one node per cell per iteration"
+    if (nfu>13) names_fu(14)="L14 if 0 return the control in real time, if 1 in iterations(1), only applies if delta &
+    & is dynamic"
+    if (nfu>14) names_fu(15)="L15 if 0 random noise is unbiased, if 1 it is biased by energies" !>>Miquel28-7-14
+    if (nfu>15) names_fu(16)="L16 if 0 forces by diff. equations, if 1 the dynamics are based on energies only" !>>Miquel28-7-14
+    if (nfu>16) names_fu(17)="L17 if 0 epithelial nodes from one side do not consider as neighbors nodes&
+    &  from the other side"
+    if (nfu>17) names_fu(18)="L18 if 0 makes daugther cells to start small, 1 makes them the mother and daugther &
+    &of the same size" !Not in  PLOS CB version !>>> Is 18-4-15
     if (nfu>18) names_fu(19)="L19 if 0 cell polarization and directed division activated by the same wa (only for single node)" !Not in  PLOS CB version !>>> HC 01-05-2020
-    if (nfu>19) names_fu(20)="L20 if 0 There is a limit in the attraction forces suffered by the nodes" !Not in  PLOS CB version !>>> HC 11-05-2020
-    if (nfu>20) names_fu(21)="L21 if 1 we apply filters" !Not in  PLOS CB version !!>> HC 17-11-2020
+    if (nfu>19) names_fu(20)="L20 if 0 There is a limit in the attraction forces suffered by the nodes (maxad parameter)" !Not in  PLOS CB version !>>> HC 11-05-2020
+    if (nfu>20) names_fu(21)="L21 if 0 we do not apply filters, if 1, we do" !Not in  PLOS CB version !!>> HC 17-11-2020
     if (nfu>21) names_fu(22)="L22 if 1 silent mode: we do not print info each iteration" !Not in  PLOS CB version !!>> HC 30-11-2020
-    if (nfu>22) names_fu(23)="L23 The neighs are only the nodes in the ADD range (0) we use an extended range (1)" !Not in  PLOS CB version !!>> HC 14-1-2021
+    if (nfu>22) names_fu(23)="L23 if 0 the neighbors are only the nodes in the ADD range, if 1 we use an extended range" !Not in  PLOS CB version !!>> HC 14-1-2021
     if (nfu>23) names_fu(24)="L24 if 0 we run the algorithm that recovers lost neighbors (assumes ffu(23)=0)"    !Not in  PLOS CB version !!>> HC 6-7-2021
-    if (nfu>24) names_fu(25)="L25 Nutrients limited. If 0 there is a limit to sum of cell cycle increase in each iteration" !Not in  PLOS CB version !!>> HC 11-2-2021
-    if (nfu>25) names_fu(26)="L26 if 0 genetic changes in node properties happen gradually " !Not in  PLOS CB version !!>> HC 15-2-2021
-    if (nfu>26) names_fu(27)="L27 if 0 we call to neighbor_build only once per iteration (assumes Rungekutta)" !Not in  PLOS CB version !!>> HC 12-7-2021
+    if (nfu>24) names_fu(25)="L25 if 1 there is a limit to sum of cell cycle increase in each iteration" !Not in  PLOS CB version !!>> HC 11-2-2021
+    if (nfu>25) names_fu(26)="L26 if 0 genetic changes in node properties happen gradually, param max_change_node_prop " !Not in  PLOS CB version !!>> HC 15-2-2021
+    if (nfu>26) names_fu(27)="L27 if 0 we call to neighbor_build only once per iteration (assumes Rungekutta), &
+    & it can be slightly dangerous but fast" !Not in  PLOS CB version !!>> HC 12-7-2021
     if (nfu>27) names_fu(28)="L28 if 0 polarized nodes are calculated as ellipsoids" !Not in  PLOS CB version !!>> TT 21-9-2021
+    ! >>> Is 9-8-24
+    if (nfu>28) names_fu(29)="L29 if 0 both daughter cells have the same size when they arise, if 1 there is a small daugther &
+    & cell and a large (mother cell)"
+    if (nfu>29) names_fu(30)="L30 if 0 Herwtig rule, if 1 cells divide perpendicularly to the direction of most adhesion"
+    if (nfu>30) names_fu(31)="L31 if 0 for small eqd but the add of the mother, if 1 daugther cells have small eqd and add," 
+    if (nfu>31) names_fu(32)="L32 if 0 do not apply limits on eqd, pla, cod and voc, if 1 apply"  ! >>> Is 9-9-24     
+    if (nfu>32) names_fu(33)="L33 if 0 %add is independent of %eqd, if 1 it is a function of eqd, 2 if add depends on eqd but &
+    & can also vary on its own"  ! >>> Is 20-9-24             
+    ! <<< Is 9-8-24
 
     if (nfi>0) names_fi(1)="WHICHEND 1: Over 4h of computation time"                                                !!>>HC 26-2-2021
     if (nfi>1) names_fi(2)="WHICHEND 2: A node has too many neighbors"                                              !!>>HC 26-2-2021
@@ -463,7 +529,6 @@ subroutine iniread
     if (nfi>11) names_fi(12)="WHICHEND 12: Broken epithelium"                                                       !!>>HC 26-2-2021
     if (nfi>12) names_fi(13)="WHICHEND 13: Blackholes (many nodes in the same place)"                               !!>>HC 26-2-2021
     if (nfi>13) names_fi(14)="WHICHEND 14: Check that all the values of the node properties are inside the ranges"  !!>>HC 11-11-2021
-    
   end subroutine
 
 !***************************************************************
@@ -734,6 +799,7 @@ return
     do i=1,nfu
       write (1,*) ffu(i),trim(names_fu(i))
     end do
+
     write (1,*)     
     if (whichend>0) then                                                !!>>HC 26-2-2021
         write (1,*) nfi,"filters: active, lethal, how often is checked. This individual was filtered by whichend:", whichend !!>>HC 26-2-2021
@@ -1001,7 +1067,8 @@ return
 
  subroutine readsnap(nofi) !with nodeo            
     integer :: sizeSeed
-    character*140 nofi
+    !character*140 nofi
+    character(len=*) :: nofi  !!>>AL 17-7-25
     integer io,ko,i,j,k,jj, jch, fch
     character*2  cd
     character*1  cu
@@ -1016,17 +1083,19 @@ return
     character*6 fmch   !!>> HC 18-6-2020 
     integer :: numdnode !!>> TT 13-7-2020
 
-!    print*,"reading ..." !!>> HC 30-11-2020 Reducing prints for optimization
+    print*,"reading ..." !!>> HC 30-11-2020 Reducing prints for optimization
+    
 
 
     open(1,file=nofi,iostat=io)
     read(1,'(a)') rversion
     read(1,'(a)',ERR=666,END=777) winame
-    read(1,*,ERR=666,END=777) jch !nparam !!! HC 12-05-2020 To read files with different number of nparam
+    read(1,*,ERR=666,END=777) nparam ! >>> Is 22-9-24
     read(1,*,ERR=666,END=777) nvarglobal_out
     read(1,*,ERR=666,END=777)
     read(1,*,ERR=666,END=777) jj
     read(1,*,ERR=666,END=777)
+
     if (allocated(ffu)) deallocate(ffu)
     allocate(ffu(nfu))
     if (allocated(param)) deallocate(param)
@@ -1041,8 +1110,9 @@ return
       endif                          !!>> HC 14-7-2021
       read(1,*,ERR=666,END=777) ffu(i)
     end do
+
     if(jj>nfu)then     !!>> HC 14-7-2021 
-      ffu=0            !!>> HC 14-7-2021 We set all ffus to 0 (default) to avoid ffu incompatibilities
+      !ffu=0  >>> Is 9-8-24  !!>> HC 14-7-2021 We set all ffus to 0 (default) to avoid ffu incompatibilities
       print*, "WARNING: THIS FILE HAS MORE FFUS THAN THE PRESENT EMAKER VERSION ALL FFUS WILL BE SET TO 0" !!>> HC 14-7-2021
     endif              !!>> HC 14-7-2021 
     allocate(cffu(nfu))
@@ -1066,14 +1136,14 @@ return
         continue                                                      !!>>HC 17-2-2021  We carry on reading parameters 
     endif                                                             !!>>HC 17-2-2021
     read(1,*,ERR=666,END=777)
-    do i=1,jch !>>> HC 11-05-2020 To read files with different number of nparam
+    do i=1,nparam !>>> HC 11-05-2020 To read files with different number of nparam
       read (1,"(I2,es24.16)",ERR=666,END=777) ko,param(i)
     end do 
     read(1,*) 
     read(1,*,ERR=666,END=777)
     read(1,*,ERR=666,END=777) 
-    read(1,*) line
-    sizeSeed =  ntokens(line)
+    read(1,*) lines
+    sizeSeed =  ntokens(lines)
     if(allocated(idumoriginal))deallocate(idumoriginal)
     allocate(idumoriginal(sizeSeed))
     BACKSPACE(1)
@@ -1081,8 +1151,8 @@ return
     read(1,*) 
     read(1,*) 
     read(1,*) 
-    read(1,'(A)') line
-    sizeSeed =  ntokens(line)
+    read(1,'(A)') lines
+    sizeSeed =  ntokens(lines)
     !print*,"sizeSeed",sizeSeed,"minimum seed",nseed !!>> HC 30-11-2020 reducing prints makes it faster
 
     if(allocated(idumR))deallocate(idumR)
@@ -1110,6 +1180,7 @@ return
     end do
     nda=nd+10
     !genetic information
+
     if (ng>0) then
       read(1,*,ERR=666,END=777)
       read(1,*,ERR=666,END=777) ng
@@ -1207,6 +1278,7 @@ return
       end do
       call update_npag
     end if
+
     if (allocated(node)) deallocate(node)
     if (allocated(nodeo)) deallocate(nodeo)
     if (allocated(cels)) deallocate(cels)
@@ -1225,40 +1297,50 @@ return
     do i=1,nd                 !THIS PART WILL NEED TO BE CHANGED EVERY TIME WE CHANGE WHAT'S IN NODE TYPE
       read(1,cr,ERR=666,END=777) node(i)
     end do
+    
+
     read(1,*,ERR=666,END=777)    
     read(1,*,ERR=666,END=777)    
     read(1,*,ERR=666,END=777)    
     read(1,*,ERR=666,END=777)    
+
     do i=1,nd  !THIS PART WILL NEED TO BE CHANGED EVERY TIME WE CHANGE WHAT'S IN NODE TYPE
       read(1,cr,ERR=666,END=777) nodeo(i)
     end do
+
+
     read(1,*,ERR=666,END=777)
     read(1,*,ERR=666,END=777)
     read(1,*,ERR=666,END=777)
     read(1,*,ERR=666,END=777) ncels
     read(1,*) 
+    
     ncals=ncels+10
     if (allocated(cels)) deallocate(cels)
     allocate(cels(ncals))
+    
+
     do i=1,ncels
       read(1,*,ERR=666,END=777)
       read(1,"(es24.16)",ERR=666,END=777) a
       read(1,"(es24.16)",ERR=666,END=777) cels(i)%minsize_for_div !>>> Is 5-2-14 
-      read(1,"(es24.16)",ERR=666,END=777) cels(i)%maxsize_for_div 
+      read(1,"(es24.16)",ERR=666,END=777) cels(i)%maxsize_for_div
       read(1,"(3es24.16)",ERR=666,END=777) cels(i)%cex,cels(i)%cey,cels(i)%cez
       read(1,"(3es24.16)",ERR=666,END=777) cels(i)%polx,cels(i)%poly,cels(i)%polz
       read(1,"(es24.16)",ERR=666,END=777) cels(i)%fase
       read(1,"(es24.16)",ERR=666,END=777) cels(i)%temt
       read(1,*,ERR=666,END=777) cels(i)%nunodes
       read(1,*,ERR=666,END=777) cels(i)%nodela		
-      read(1,*,ERR=666,END=777) cels(i)%ctipus             
+      read(1,*,ERR=666,END=777) cels(i)%ctipus
       if (allocated(cels(i)%node)) deallocate(cels(i)%node)
       allocate(cels(i)%node(cels(i)%nodela))
       read(1,*,ERR=666,END=777)
       read(1,*,ERR=666,END=777) cels(i)%node(1:cels(i)%nunodes)
       read(1,*) 
+
     end do
 
+    close(1) !AL 5-15-25: if you try to read the same EMaker file twice in the same script, you need to uncoment this
 
     ! <<< Is 13-3-15 nodeo=node !>>Miquel17-9-14
 
@@ -1292,7 +1374,7 @@ return
     open(1,file=nofi,iostat=io)
     read(1,'(a)') rversion
     read(1,'(a)',ERR=666,END=777) winame
-    read(1,*,ERR=666,END=777) !nparam
+    read(1,*,ERR=666,END=777) nparam        ! Is 22-9-24
     read(1,*,ERR=666,END=777) nvarglobal_out
     read(1,*,ERR=666,END=777)
     read(1,*,ERR=666,END=777)
@@ -1502,7 +1584,7 @@ return
     open(1,file=nofi,iostat=io)
     read(1,'(a)') rversion
     read(1,'(a)',ERR=665,END=775) winame
-    !read(1,*,ERR=665,END=775) nparam
+    read(1,*,ERR=665,END=775) nparam     ! >>> Is 22-9-24
     read(1,*,ERR=665,END=775) nvarglobal_out
     read(1,*,ERR=665,END=775)
     read(1,*,ERR=665,END=775)
@@ -1648,10 +1730,10 @@ if (rappend/=0) close(1)
     character*30 nofi                                                             !!>>HC 20-2-2021
     character*300 rangfile,rversion                                               !!>>HC 20-2-2021
     integer i,j, ich, jch, jj, ko                                                 !!>>HC 20-2-2021
-    real*8 para(nparam)                                                           !!>>HC 20-2-2021
+    !!!>> AL 7-4-25real*8 para(nparam)                                                           !!>>HC 20-2-2021
     character*10 check !!>> HC 17-2-2021                                          !!>>HC 20-2-2021
     integer :: ng0, ncels0, nd0, ntipusadh0,funk!!>>HC 20-2-2021
-    
+    integer :: patch  !!>> AL 7-4-25
     open(2,file=rangfile)                                     !!>>HC 20-2-2021
     read(2,'(a)') rversion                                    !!>>HC 20-2-2021
     read(2,*)
@@ -1660,9 +1742,9 @@ if (rappend/=0) close(1)
        read(2,*) max_glim(ich), min_glim(ich)
     enddo
     read(2,*)                                                 !!>>HC 20-2-2021
-    read(2,*) jch                                             !!>>HC 20-2-2021
+    read(2,*) patch                                           !!>> AL 7-4-25
     read(2,*)                                                 !!>>HC 20-2-2021
-    do ich=1,jch                                              !!>>HC 20-2-2021
+    do ich=1,patch                                              !!>>HC 20-2-2021
        if(rembeh(ich)==0)then; max_elim(ich)=0.0d0; max_elim(ich)=0.0d0; endif  !!>>HC 20-2-2021
        read(2,*) funk, max_elim(ich), min_elim(ich), rembeh(ich)                !!>>HC 20-2-2021
     enddo                                                     !!>>HC 20-2-2021   
@@ -1673,7 +1755,8 @@ if (rappend/=0) close(1)
 !***************************************************************
 
 subroutine get_its(tti,tfi)
-  integer tti,tfi
+  !integer tti,tfi
+  real*8 tti,tfi    !!AL 20-5-25>> if we use real time this variables should be floats
   character*10 cf  
 
   call getarg(3,cf)
@@ -1736,29 +1819,29 @@ subroutine read_config_file !config file will set some general environmental var
    read(7,*)
    read(7,*)
 
-   do i=1,41              !!>> HC 12-3-2021
-     read(7,*)conf_flag(i)
+   do i=1,39       ! >>> Is 8-8-24       !!>> HC 12-3-2021
+     read(7,*) conf_flag(i)
    end do
+! >>> Is 8-8-24
+!   read(7,*)
+!   read(7,*)
+!   read(7,*)
 
-   read(7,*)
-   read(7,*)
-   read(7,*)
+!   read(7,*)conf_select_what
 
-   read(7,*)conf_select_what
+!   if(conf_select_what>0)then
+!     read(7,*)
+!     read(7,*)conf_nki
+!     read(7,*)
 
-   if(conf_select_what>0)then
-     read(7,*)
-     read(7,*)conf_nki
-     read(7,*)
-
-     if(conf_nki>0)then
-       allocate(conf_oopp(conf_nki))
-       do i=1,conf_nki
-         read(7,*) conf_oopp(i)
-       end do
-     end if
-   end if
-
+!     if(conf_nki>0)then
+!       allocate(conf_oopp(conf_nki))
+!       do i=1,conf_nki
+!         read(7,*) conf_oopp(i)
+!       end do
+!     end if
+!   end if
+!<<< Is 8-8-24
    close(7)
 
 
@@ -1814,7 +1897,7 @@ subroutine no_config_file !>>Miquel2-1-14
    conf_flag(19)=0   !display cell polarization vectors 
    conf_flag(20)=0   !nothing 
    conf_flag(21)=0   !display cell centroids 
-   conf_flag(22)=1   !epithelial nodes as cylinders
+   conf_flag(22)=0   !epithelial nodes as cylinders
    conf_flag(23)=0   !nothing
    conf_flag(24)=0   !nothing
    conf_flag(25)=0   !nothing

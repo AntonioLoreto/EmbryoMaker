@@ -1,14 +1,11 @@
 #!/bin/bash
 
-
 cd src/core
-
-
+echo 'Compiling EmbryoMaker'
+echo '3..2..1..'
 echo 'descending'
 pwd
-
 aleas=aleas.mod.f90
-
 #making object files
 echo 'making object files'
 

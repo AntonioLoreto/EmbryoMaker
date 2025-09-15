@@ -350,7 +350,7 @@ integer :: kch,jch,jjch,kkch,ic,icc                             !!>>HC 9-10-2020
   node(nd)%dif=0
   node(nd)%kfi=0
   node(nd)%pla=0
-  node(nd)%kvol=0
+  node(nd)%voc=0
   node(nd)%talone=0
   node(nd)%vod=0d0  !pfh 20-3-15
   node(nd)%adh=0d0   !pfh 20-3-15

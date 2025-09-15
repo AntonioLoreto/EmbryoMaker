@@ -28,7 +28,7 @@ module nexus
   use single_node
   use mitosis
   use neighboring !>>>> TT 22-05-2020
-
+  use conservative_R !!>> AL 9-5-25
 
 contains
 
@@ -37,24 +37,16 @@ contains
 ! Declare the interface for POSIX fsync function
 
 subroutine nexe
-
-!interface
-!  function fsync (fd) bind(c,name="fsync")
-!  use iso_c_binding, only: c_int
-!     integer(c_int), value :: fd
-!     integer(c_int) :: fsync
-!   end function fsync
-!end interface
-
-
   implicit none                                                                !!>> HC 18-9-2020
   integer i,j,k,ii,jj,kk,ik,ikk,ick,ret
   real*8 a, fitelli                                                            !!>> HC 2-7-2020
   real*8 differ
-  real*8 kplast,kvol,dvol
+  real*8 kplast,voc,dvol,orival ! >>> Is 23-9-24
   character*140 nofifit, tarfit                                                !!>> HC 2-7-2020
   integer,save::truenodeos=0
-  real*8 :: icr,icrr=0.005 !RZ 30-05-17
+  real*8 :: icr,icrr !=0.005 !RZ 30-05-17
+
+  icrr=max_change_node_prop  ! >>> Is 27-7-24
 
 ! GENETIC REGULATION OF CELL BEHAVIOURS
 
@@ -159,7 +151,6 @@ subroutine nexe
         !if(fmeanl(j)<epsilod)then;kj=1/node(j)%rep;else;kj=1/node(j)%you;endif
         node(i)%pld=node(i)%pld+(node(i)%pla*fmeanl(i))*delta
         node(j)%pld=node(j)%pld+(node(j)%pla*fmeanl(j))*delta !; print*,"fmeanl",fmeanl(i),fmeanl(j)
-
         nodeo(i)%pld=node(i)%pld  !>>Miquel17-9-14
         nodeo(j)%pld=node(j)%pld  !>>Miquel17-9-14
 
@@ -184,45 +175,92 @@ subroutine nexe
         node(i)%cod=0 ;node(j)%cod=0
       end if
 
-      if(ffu(10)==0) then        !volume conservation   !>>Miquel6-5-14                                  ! >>> Is 17-2-21
-        !!kvol=node(i)%kvol                                                                              ! >>> Is 17-2-21
-        !dvol=0.5*(node(i)%grd+node(j)%grd-(node(i)%eqd+node(j)%eqd))                                    ! >>> Is 17-2-21
-        !node(i)%vod=node(i)%vod+node(i)%kvol*dvol*delta                                                 ! >>> Is 17-2-21
-        !node(j)%vod=node(j)%vod+node(j)%kvol*dvol*delta                                                 ! >>> Is 17-2-21
-        !nodeo(i)%vod=node(i)%vod  !>>Miquel17-9-14                                                      ! >>> Is 17-2-21
-        !nodeo(j)%vod=node(j)%vod  !>>Miquel17-9-14                                                      ! >>> Is 17-2-21
-
-        k=node(i)%altre                                                                                  ! >>> Is 17-2-21
-        a=node(i)%cod+node(k)%cod  ! if that is not zero if means that there  is no volume conservation  ! >>> Is 17-2-21
-        if (abs(a)>0.1d-4) then  !totally arbitrary                                                      ! >>> Is 17-2-21
-          ! we check which side is bigger in absolute value                                              ! >>> Is 17-2-21
-          if (abs(node(i)%cod)>abs(node(k)%cod)) then                                                    ! >>> Is 17-2-21
-            node(k)%cod=-node(i)%cod                                                                     ! >>> Is 17-2-21
-          else                                                                                           ! >>> Is 17-2-21
-            node(i)%cod=-node(k)%cod                                                                     ! >>> Is 17-2-21
-          end if                                                                                         ! >>> Is 17-2-21
-        end if                                                                                           ! >>> Is 17-2-21
-      else                                                                                               ! >>> Is 17-2-21
-        node(i)%vod=0 ; node(j)%vod=0                                                                    ! >>> Is 17-2-21
-      end if                                                                                             ! >>> Is 17-2-21
-
       if (ffu(11)==1) call diffusion_of_reqcr       !diffusion of reqcr ! >>> Is 25-5-14
 
       a=node(i)%add-node(i)%eqd
+
+      
+      ! >>> Is 22-9-24
+      if (ffu(32)==1) then
+        if (node(i)%tipus==1) then ; orival=orival_apical ; else ; orival=orival_basal ; end if
+        if (node(i)%cod<mincod*orival) then
+          node(i)%cod=mincod*orival
+        else
+          if (node(i)%cod>maxcod*orival) node(i)%cod=maxcod*orival
+        end if
+        if (node(i)%pld<minpld*orival) then
+          node(i)%pld=minpld*orival
+        else 
+          if (node(i)%pld>maxpld*orival) node(i)%pld=maxpld*orival
+        end if
+        if (node(i)%vod<minvod*orival) then
+          node(i)%vod=minvod*orival
+        else
+          if (node(i)%vod>maxvod*orival) node(i)%vod=maxvod*orival
+        end if
+      end if
+      !<<< Is 23-9-24
+
       node(i)%eqd=node(i)%grd+node(i)%cod+node(i)%pld+node(i)%vod  !now req is the sum of the req components: growth/apoptosis and contraction/deformation
       if(node(i)%eqd>df_reqmax) node(i)%eqd=df_reqmax !put an upper an lower boundary on how much  !>>Miquel28-7-14
       if(node(i)%eqd<reqmin) node(i)%eqd=reqmin !the req can be deformed
-      node(i)%add=node(i)%eqd+a
+
+      ! >>> Is 23-9-24
+      if (ffu(32)==1) then
+        if (node(i)%eqd<mineqd*orival) then
+          node(i)%eqd=mineqd*orival
+        else
+          if (node(i)%eqd>maxeqd*orival) node(i)%eqd=maxeqd*orival
+        end if
+      end if
+      ! <<< Is 23-9-24
+
+
+      if (ffu(33)==1) node(i)%add=node(i)%eqd+a ! >>> Is 20-9-24
 
       b=node(j)%add-node(j)%eqd
+
+      ! >>> Is 22-9-24
+      if (ffu(32)==1) then
+        if (node(j)%tipus==1) then ; orival=orival_apical ; else ; orival=orival_basal ; end if
+        if (node(j)%cod<mincod*orival) then
+          node(j)%cod=mincod*orival
+        else
+          if (node(j)%cod>maxcod*orival) node(j)%cod=maxcod*orival
+        end if
+        if (node(j)%pld<minpld*orival) then
+          node(j)%pld=minpld*orival
+        else
+          if (node(j)%pld>maxpld*orival) node(j)%pld=maxpld*orival
+        end if
+        if (node(j)%vod<minvod*orival) then
+          node(j)%vod=minvod*orival
+        else
+          if (node(j)%vod>maxvod*orival) node(j)%vod=maxvod*orival
+        end if
+      end if
+      ! <<< Is 22-9-24
+
       node(j)%eqd=node(j)%grd+node(j)%cod+node(j)%pld+node(j)%vod  !now req is the sum of the req components: growth/apoptosis and contraction/deformation
       if(node(j)%eqd>df_reqmax) node(j)%eqd=df_reqmax !put an upper an lower boundary on how much  !>>Miquel28-7-14
       if(node(j)%eqd<reqmin) node(j)%eqd=reqmin !the req can be deformed
-      node(j)%add=node(j)%eqd+b
+
+      ! >>> Is 23-9-24
+      if (ffu(32)==1) then
+        if (node(j)%eqd<mineqd*orival) then
+          node(j)%eqd=mineqd*orival
+        else
+          if (node(j)%eqd>maxeqd*orival) node(j)%eqd=maxeqd*orival
+        end if
+      end if
+      ! <<< Is 23-9-24
+
+      if (ffu(33)==1) node(j)%add=node(j)%eqd+b ! >>> Is 20-9-24
       if (npag(6)>0) then;ii=6;a=0 ; b=0 ; do k=1,npag(ii) ; kk=whonpag(ii,k) ; !wa in req-space units  
       if (gex(i,kk)>0.0d0) then ; a=a+gex(i,kk)*gen(kk)%e(ii) ;endif;
       if (gex(j,kk)>0.0d0) then ; b=b+gex(j,kk)*gen(kk)%e(ii) ;endif;enddo;
       node(i)%add=nodeo(i)%add+a*differ;node(j)%add=nodeo(j)%add+b*differ;
+
       if (node(i)%add<0) node(i)%add=0.0;if (node(j)%add<0) node(j)%add=0.0;end if
       if (npag(7)>0) then;ii=7;a=0 ; b=0 ; do k=1,npag(ii) ; kk=whonpag(ii,k) ; !wa in req-space units  
       if (gex(i,kk)>0.0d0) then ; a=a+gex(i,kk)*gen(kk)%e(ii) ;endif;
@@ -282,8 +320,8 @@ subroutine nexe
       if (npag(28)>0) then;ii=28;a=0 ; b=0 ; do k=1,npag(ii) ; kk=whonpag(ii,k) ; !wa in req-space units 
       if (gex(i,kk)>0.0d0) then ; a=a+gex(i,kk)*gen(kk)%e(ii) ;endif;
       if (gex(j,kk)>0.0d0) then ; b=b+gex(j,kk)*gen(kk)%e(ii) ;endif;enddo;
-      node(i)%kvol=nodeo(i)%kvol+a*differ;node(j)%kvol=nodeo(j)%kvol+b*differ;
-      if (node(i)%kvol<0) node(i)%kvol=0.0;if (node(j)%kvol<0) node(j)%kvol=0.0;end if
+      node(i)%voc=nodeo(i)%voc+a*differ;node(j)%voc=nodeo(j)%voc+b*differ;
+      if (node(i)%voc<0) node(i)%voc=0.0;if (node(j)%voc<0) node(j)%voc=0.0;end if
 
 
     else if (node(i)%tipus>2)then !this for mesenchyme and ECM
@@ -301,14 +339,36 @@ subroutine nexe
         node(i)%cod=0
       end if
 
+      ! >>> Is 22-9-24
+      if (ffu(32)==1) then
+        if (node(i)%cod<mincod*orival_other) then
+          node(i)%cod=mincod*orival_other
+        else
+          if (node(i)%cod>maxcod*orival_other) node(i)%cod=maxcod*orival_other
+        end if
+      end if
+      ! <<< Is 22-9-24
+
       a=node(i)%add-node(i)%eqd
       node(i)%eqd=node(i)%grd+node(i)%cod  !now req is the sum of the req components: growth/apoptosis and contraction/deformation
+
+      !>>> Is 23-9-24
+      if (ffu(32)==1) then
+        if (node(i)%eqd<mineqd*orival_other) then
+          node(i)%eqd=mineqd*orival_other
+        else
+          if (node(i)%eqd>maxeqd*orival_other) node(i)%eqd=maxeqd*orival_other
+        end if
+      end if
+      !<<< Is 23-9-24
+
       if(node(i)%eqd>df_reqmax) node(i)%eqd=df_reqmax !put an upper an lower boundary on how much  !>>Miquel28-7-14
       if(node(i)%eqd<reqmin) node(i)%eqd=reqmin !the req can be deformed
-      node(i)%add=node(i)%eqd+a
+      if (ffu(33)==1) node(i)%add=node(i)%eqd+a  ! >>> Is 20-9-24
 
       if (npag(6)>0) then;ii=6;a=0 ; do k=1,npag(ii) ; kk=whonpag(ii,k) ; if (gex(i,kk)>0.0d0) then ; 
-      a=a+gex(i,kk)*gen(kk)%e(ii) ;endif;enddo;node(i)%add=nodeo(i)%add+a*differ;if (node(i)%add<0) node(i)%add=0.0;end if
+      a=a+gex(i,kk)*gen(kk)%e(ii) ;endif;enddo;
+      node(i)%add=nodeo(i)%add+a*differ;if (node(i)%add<0) node(i)%add=0.0;end if
       if (npag(7)>0) then;ii=7;a=0 ; do k=1,npag(ii) ; kk=whonpag(ii,k) ; if (gex(i,kk)>0.0d0) then ; 
       a=a+gex(i,kk)*gen(kk)%e(ii) ;endif;enddo;node(i)%you=nodeo(i)%you+a*differ;if (node(i)%you<0) node(i)%you=0.0;end if
       if (npag(8)>0) then;ii=8;a=0 ; do k=1,npag(ii) ; kk=whonpag(ii,k) ; if (gex(i,kk)>0.0d0) then ; 
@@ -350,27 +410,25 @@ subroutine nexe_gradual !!>> HC 12-2-2021 This subrutine includes the code writt
                         !!>> HC 12-2-2021 it was formerly included in nexe2
   implicit none                            !!>> HC 12-2-2021           
   integer i,j,k,ii,jj,kk,ik,ikk,ick        !!>> HC 12-2-2021
-  real*8 a                                 !!>> HC 12-2-2021
+  real*8 a,aa,aaa,b,bb,bbb,ab,ba              !!>>> Is 4-10-24
   real*8 differ                            !!>> HC 12-2-2021
-  real*8 dvol                              !!>> HC 12-2-2021
+  real*8 dvol,orival                       !>>> Is 23-9-24 !!>> HC 12-2-2021
   character*300 cx                         !!>> HC 12-2-2021
   real*8 mz3,mz4                           !!>> HC 12-2-2021
 
-  real*8 :: bbb                            !!>> HC 12-2-2021
   real*8 :: scui,maxa,maxs(3),mins(3)      !!>> HC 12-2-2021
   integer :: nd_a,nd_t,ndm,first=0         !!>> HC 12-2-2021
-
+  
   integer,save::truenodeos=0               !!>> HC 12-2-2021
-  real*8 :: icr,icrr=0.005 !RZ 30-05-17    !!>> HC 12-2-2021
+  real*8 :: icr,icrr !RZ 30-05-17    !!>> HC 12-2-2021
  
+  icrr=max_change_node_prop  ! >>> Is 27-7-24
 
-        
   ! GENETIC REGULATION OF CELL BEHAVIOURS
 
   if (ndo==0)then                    !!>> HC 12-2-2021
      ndoo=nd                         !!>> HC 12-2-2021
      ndo=1                           !!>> HC 12-2-2021
-!     print*,"ndo",ndo,"ndoo",nd      !!>> HC 12-2-2021
   end if                             !!>> HC 12-2-2021
 
   !extracellular matrix secretion
@@ -439,7 +497,6 @@ subroutine nexe_gradual !!>> HC 12-2-2021 This subrutine includes the code writt
   end if                                                                                                                      !!>> HC 12-2-2021
 
   
-
   ! GENETIC REGULATION OF NODE PROPERTIES                                                                                  !!>> HC 12-2-2021
   do i=1,nd         ! we update that parameter in each cell that expresses the gene                                        !!>> HC 12-2-2021
                     ! WE ONLY UPDATES DE NODES IN WHICH THE GENE IS EXPRESSED, OTHERWISE WE LEAVE IT IS AS IT WAS          !!>> HC 12-2-2021
@@ -471,9 +528,10 @@ subroutine nexe_gradual !!>> HC 12-2-2021 This subrutine includes the code writt
            ! Rz 18-5-17 makes node properties to change gradually?????                                                     !!>> HC 12-2-2021
            icr=icrr ! RZ 30-5-17                                                                                           !!>> HC 12-2-2021
            aa=node(i)%pld; bb=node(j)%pld  ! previous values RZ 30-5-17                                                    !!>> HC 12-2-2021
-                                              
+
            node(i)%pld=node(i)%pld+(node(i)%pla*fmeanl(i))*delta                                                           !!>> HC 12-2-2021
            node(j)%pld=node(j)%pld+(node(j)%pla*fmeanl(j))*delta !; print*,"fmeanl",fmeanl(i),fmeanl(j)                    !!>> HC 12-2-2021
+
            ! RZ gradual 30-5-17                                                                                            !!>> HC 12-2-2021
            !if (node(i)%pld>aa*(1+icr).and.aa.ne.0) node(i)%pld=aa*(1+icr)                                                  !!>> HC 12-2-2021 !!>> TT 2-9-2021
            !if (node(j)%pld>bb*(1+icr).and.bb.ne.0) node(j)%pld=bb*(1+icr)                                                  !!>> HC 12-2-2021 !!>> TT 2-9-2021
@@ -501,7 +559,7 @@ subroutine nexe_gradual !!>> HC 12-2-2021 This subrutine includes the code writt
               endif                                                                                                        !!>> HC 12-2-2021
            enddo                                                                                                           !!>> HC 12-2-2021
            ! Rz 18-5-17 makes node properties to change gradually?????                                                     !!>> HC 12-2-2021
-           icr=icrr ! RZ 30-5-17                                                                                           !!>> HC 12-2-2021
+           icr=icrr ! RZ 30-5-17
            aaa=node(i)%cod; bbb=node(j)%cod  ! previous values RZ 30-5-17                                                  !!>> HC 12-2-2021
            aa=0.250d0; bb=0.250d0!nodeoini(5,1); bb=nodeoini(5,1)  ! previous values RZ 30-5-17                            !!>> HC 2-7-2021 COD is not a property, so its nodeo is =0
            node(i)%cod=nodeo(i)%cod+a!*differ  !pfh no differ 26-11-15                                                     !!>> HC 12-2-2021 we have to set up an arbitrary nodeo value
@@ -514,7 +572,6 @@ subroutine nexe_gradual !!>> HC 12-2-2021 This subrutine includes the code writt
         else                                                                                                               !!>> HC 12-2-2021
            node(i)%cod=0 ;node(j)%cod=0                                                                                    !!>> HC 12-2-2021
         end if                                                                                                             !!>> HC 12-2-2021
-        
         
         if (npag(22)>0) then  ! growth by genes                                                                            !!>> HC 7-10-2021
            ii=22 ; a=0.0d0 ; b=0.0d0                                                                                       !!>> HC 7-10-2021
@@ -531,125 +588,122 @@ subroutine nexe_gradual !!>> HC 12-2-2021 This subrutine includes the code writt
            node(j)%grd=nodeo(j)%grd+b!*differ  !pfh no differ 26-11-15                                                     !!>> HC 7-10-2021 
         end if                                                                                                             !!>> HC 7-10-2021
 
-
-      if(ffu(10)==0) then        !volume conservation   !>>Miquel6-5-14                                  ! >>> Is 17-2-21
-        !!kvol=node(i)%kvol                                                                              ! >>> Is 17-2-21
-        !dvol=0.5*(node(i)%grd+node(j)%grd-(node(i)%eqd+node(j)%eqd))                                    ! >>> Is 17-2-21
-        !node(i)%vod=node(i)%vod+node(i)%kvol*dvol*delta                                                 ! >>> Is 17-2-21
-        !node(j)%vod=node(j)%vod+node(j)%kvol*dvol*delta                                                 ! >>> Is 17-2-21
-        !nodeo(i)%vod=node(i)%vod  !>>Miquel17-9-14                                                      ! >>> Is 17-2-21
-        !nodeo(j)%vod=node(j)%vod  !>>Miquel17-9-14                                                      ! >>> Is 17-2-21
-
-        k=node(i)%altre                                                                                  ! >>> Is 17-2-21
-        a=node(i)%cod+node(k)%cod  ! if that is not zero if means that there  is no volume conservation  ! >>> Is 17-2-21
-        if (abs(a)>0.1d-4) then  !totally arbitrary                                                      ! >>> Is 17-2-21
-          ! we check which side is bigger in absolute value                                              ! >>> Is 17-2-21
-          if (abs(node(i)%cod)>abs(node(k)%cod)) then                                                    ! >>> Is 17-2-21
-            node(k)%vod=-node(i)%cod*node(i)%kvol                                                        ! >>> Is 17-2-21 !!>> HC 6-7-2021 kvol is the percentage of volume conserved
-          else                                                                                           ! >>> Is 17-2-21
-            node(i)%vod=-node(k)%cod*node(i)%kvol                                                        ! >>> Is 17-2-21 !!>> HC 6-7-2021 kvol is the percentage of volume conserved
-          end if                                                                                         ! >>> Is 17-2-21
-        end if                                                                                           ! >>> Is 17-2-21
-      else                                                                                               ! >>> Is 17-2-21
-        node(i)%vod=0 ; node(j)%vod=0                                                                    ! >>> Is 17-2-21
-      end if                                                                                             ! >>> Is 17-2-21
-            
-!        if (ffu(10)==0) then        !volume conservation   !>>Miquel6-5-14 ! >>> Is 24-5-14                                !!>> HC 12-2-2021
-!           dvol=0.5*(node(i)%grd+node(j)%grd-(node(i)%eqd+node(j)%eqd))                                                    !!>> HC 12-2-2021
-!           icr=icrr ! RZ 30-5-17                                                                                           !!>> HC 12-2-2021
-!           aa=node(i)%vod; bb=node(j)%vod  ! previous values RZ 30-5-17                                                    !!>> HC 12-2-2021
-!           node(i)%vod=node(i)%vod+node(i)%kvol*dvol*delta                                                                 !!>> HC 12-2-2021
-!           node(j)%vod=node(j)%vod+node(j)%kvol*dvol*delta                                                                 !!>> HC 12-2-2021
-!           ! RZ gradual 30-5-17                                                                                            !!>> HC 12-2-2021
-!           if (node(i)%vod>aa*(1+icr).and.aa.ne.0) node(i)%vod=aa*(1+icr)                                                  !!>> HC 12-2-2021
-!           if (node(j)%vod>bb*(1+icr).and.bb.ne.0) node(j)%vod=bb*(1+icr)                                                  !!>> HC 12-2-2021
-!           if (node(i)%vod<aa*(1-icr).and.aa.ne.0) node(i)%vod=aa*(1-icr)                                                  !!>> HC 12-2-2021
-!           if (node(j)%vod<bb*(1-icr).and.bb.ne.0) node(j)%vod=bb*(1-icr)                                                  !!>> HC 12-2-2021
-!           if (aa==0.and.node(i)%vod>icr) node(i)%vod=icr                                                                  !!>> HC 12-2-2021
-!           if (bb==0.and.node(j)%vod>icr) node(j)%vod=icr                                                                  !!>> HC 12-2-2021
-!           if (aa==0.and.node(i)%vod<icr*(-1)) node(i)%vod=icr*(-1)                                                        !!>> HC 12-2-2021
-!           if (bb==0.and.node(j)%vod<icr*(-1)) node(j)%vod=icr*(-1)                                                        !!>> HC 12-2-2021
-!           ! RZ end changes                                                                                                !!>> HC 12-2-2021
-!           nodeo(i)%vod=node(i)%vod  !>>Miquel17-9-14                                                                      !!>> HC 12-2-2021
-!           nodeo(j)%vod=node(j)%vod  !>>Miquel17-9-14                                                                      !!>> HC 12-2-2021
-!        else                                                                                                               !!>> HC 12-2-2021
-!           node(i)%vod=0 ; node(j)%vod=0                                                                                   !!>> HC 12-2-2021
-!        end if                                                                                                             !!>> HC 12-2-2021
-
         if (ffu(11)==1) call diffusion_of_reqcr       !diffusion of reqcr ! >>> Is 25-5-14                                 !!>> HC 12-2-2021
         
-        a=node(i)%add-node(i)%eqd !>>>Miquel9-9-15                                                                         !!>> HC 12-2-2021
+        ab=node(i)%add-node(i)%eqd !>>>Miquel9-9-15                                                                         !!>> HC 12-2-2021
         ! Rz 18-5-17 makes node properties to change gradually                                                             !!>> HC 12-2-2021
         icr=icrr ! RZ 30-5-17                                                                                              !!>> HC 12-2-2021
-        aa=node(i)%eqd; aaa=node(i)%eqd; bb=node(j)%eqd; bbb=node(j)%eqd  ! previous values RZ 30-5-17                     !!>> HC 12-2-2021 !!>> TT 2-9-2021
+        aa=node(i)%eqd; aaa=node(i)%eqd; bb=node(j)%eqd; bbb=node(j)%eqd  ! previous values RZ 30-5-17                     !!>> HC 12-2-2021 !!>> TT 2-9-2021      
         
-      
-        
+
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        
         !!! HERE WE ACTUALLY CHANGE THE EQD AND ADD VALUES
         !!>> TT 2-9-2021 No gradual change of COD, GRD and PLD, but a gradual change of EQD
+
+        ! >>> Is 22-9-24
+        if (ffu(32)==1) then
+          if (node(i)%tipus==1) then ; orival=orival_apical ; else ; orival=orival_basal ; end if
+          if (node(i)%cod<mincod*orival) then
+            node(i)%cod=mincod*orival
+          else
+            if (node(i)%cod>maxcod*orival) node(i)%cod=maxcod*orival
+          end if
+          if (node(i)%pld<minpld*orival) then
+            node(i)%pld=minpld*orival
+          else
+            if (node(i)%pld>maxpld*orival) node(i)%pld=maxpld*orival
+          end if
+          if (node(i)%vod<minvod*orival) then
+            node(i)%vod=minvod*orival
+          else
+            if (node(i)%vod>maxvod*orival) node(i)%vod=maxvod*orival
+          end if
+        end if
+        ! <<< Is 22-9-24
+
         node(i)%eqd=node(i)%grd+node(i)%cod+node(i)%pld+node(i)%vod  !now req is the sum of the req components: growth/apoptosis and contraction/deformation !!>> HC 12-2-2021
         if (node(i)%eqd>aaa+aa*icr) node(i)%eqd=aaa+aa*icr !!>> TT 2-9-2021
         if (node(i)%eqd<aaa-aa*icr) node(i)%eqd=aaa-aa*icr !!>> TT 2-9-2021
         if(node(i)%eqd>df_reqmax) node(i)%eqd=df_reqmax !put an upper an lower boundary on how much  !>>Miquel28-7-14      !!>> HC 12-2-2021
+
+        ! >>> Is 23-9-24
+        if (ffu(32)==1) then
+          if (node(i)%eqd<mineqd*orival) then
+            node(i)%eqd=mineqd*orival
+          else
+            if (node(i)%eqd>maxeqd*orival) node(i)%eqd=maxeqd*orival
+          end if
+        end if
+        ! <<< Is 23-9-24
+
         if(node(i)%eqd<reqmin) node(i)%eqd=reqmin !the req can be deformed                                                 !!>> HC 12-2-2021
-        node(i)%add=node(i)%eqd+a !>>>Miquel9-9-15                                                                         !!>> HC 15-2-2021 it is node not nodeo  
-        if(node(i)%add.le.node(i)%eqd*1.0) node(i)%add=node(i)%eqd*1.0  !pfh 9-6-15                                        !!>> HC 15-2-2021 it is node not nodeo          
-        b=node(j)%add-node(j)%eqd !>>>Miquel9-9-15                                                                         !!>> HC 12-2-2021
+        ! >>> 22-9-24
+        if (ffu(33)==1) then
+          node(i)%add=node(i)%eqd+ab !>>>Miquel9-9-15  ! >>> Is 20-9-24                                                                        !!>> HC 15-2-2021 it is node not nodeo  
+          if(node(i)%add.le.node(i)%eqd*1.0) node(i)%add=node(i)%eqd*1.0 ; 
+        end if  !pfh 9-6-15  ! >>> Is 20-9-24                                        !!>> HC 15-2-2021 it is node not nodeo          
+        ba=node(j)%add-node(j)%eqd !>>>Miquel9-9-15                                                                         !!>> HC 12-2-2021
+        ! <<< 22-9-24
+
+        ! >>> Is 22-9-24
+        if (ffu(32)==1) then
+          if (node(j)%tipus==1) then ; orival=orival_apical ; else ; orival=orival_basal ; end if
+          if (node(j)%cod<mincod*orival) then
+            node(j)%cod=mincod*orival
+          else
+            if (node(j)%cod>maxcod*orival) node(j)%cod=maxcod*orival
+          end if
+          if (node(j)%pld<minpld*orival) then
+            node(j)%pld=minpld*orival
+          else
+            if (node(j)%pld>maxpld*orival) node(j)%pld=maxpld*orival
+          end if
+          if (node(j)%vod<minvod*orival) then
+            node(j)%vod=minvod*orival
+          else
+            if (node(j)%vod>maxvod*orival) node(j)%vod=maxvod*orival
+          end if
+        end if
+        ! <<< Is 22-9-24
+
         node(j)%eqd=node(j)%grd+node(j)%cod+node(j)%pld+node(j)%vod  !now req is the sum of the req components: growth/apoptosis and contraction/deformation !!>> HC 12-2-2021
         if (node(j)%eqd>bbb+bb*icr) node(j)%eqd=bbb+bb*icr !!>> TT 2-9-2021
         if (node(j)%eqd<bbb-bb*icr) node(j)%eqd=bbb-bb*icr !!>> TT 2-9-2021
         if(node(j)%eqd>df_reqmax) node(j)%eqd=df_reqmax !put an upper an lower boundary on how much  !>>Miquel28-7-14                                        !!>> HC 12-2-2021
-        if(node(j)%eqd<reqmin) node(j)%eqd=reqmin !the req can be deformed                                                                                   !!>> HC 12-2-2021
-        node(j)%add=node(j)%eqd+b !>>>Miquel9-9-15                                                                                   !!>> HC 15-2-2021 it is node not nodeo                          
-!        if(node(i)%add.le.node(i)%eqd*1.0) node(i)%add=node(i)%eqd*1.0  !pfh 9-6-15 1.5                                              !!>> HC 12-2-2021
-!        if(node(i)%add.ge.node(i)%eqd*1.2) node(i)%add=node(i)%eqd*1.2  !pfh 9-6-15 2.5                                              !!>> HC 12-2-2021
-!        if(node(j)%add.le.node(j)%eqd*1.0) node(j)%add=node(j)%eqd*1.0  !pfh 9-6-15                                                  !!>> HC 12-2-2021
-!        if(node(j)%add.ge.node(j)%eqd*1.2) node(j)%add=node(j)%eqd*1.2  !pfh 9-6-15                                                  !!>> HC 12-2-2021
-        !pfh no differ 26-11-15                                                                                                      !!>> HC 12-2-2021  
-  
 
-
-     
-        if (npag(6)>0) then                                                                                             
-           ii=6;a=0 ; b=0 ; do k=1,npag(ii) ; kk=whonpag(ii,k) ; !wa in req-space units                !!>> HC 12-2-2021
+        ! >>> Is 23-9-24
+        if (ffu(32)==1) then
+          if (node(j)%eqd<mineqd*orival) then
+            node(j)%eqd=mineqd*orival
+          else
+            if (node(j)%eqd>maxeqd*orival) node(j)%eqd=maxeqd*orival
+          end if
+        end if
+        ! <<< Is 23-9-24
+        if(node(j)%eqd<reqmin) node(j)%eqd=reqmin !the req can be deformed 
+                                                                                  !!>> HC 12-2-2021
+        if (ffu(33)==1) then
+          node(j)%add=node(j)%eqd+ba !>>>Miquel9-9-15                                                       ! >>> Is 20-9-24   !!>> HC 15-2-2021 it is node not nodeo                          
+        else
+          if (npag(6)>0) then                                                                                             
+           ii=6; a=0 ; b=0 ; do k=1,npag(ii) ; kk=whonpag(ii,k) ;  ! wa in req-space units             !!>> HC 12-2-2021
            if (gex(i,kk)>0.0d0) then ; a=a+gex(i,kk)*gen(kk)%e(ii) ;endif;                             !!>> HC 12-2-2021
            if (gex(j,kk)>0.0d0) then ; b=b+gex(j,kk)*gen(kk)%e(ii) ;endif;enddo;                       !!>> HC 12-2-2021
            ! Rz 18-5-17 makes node properties to change gradually?????                                 !!>> HC 12-2-2021
            icr=icrr ! RZ 30-5-17                                                                       !!>> HC 12-2-2021
-           aaa=node(i)%add; bbb=node(j)%add  ! previous values RZ 30-5-17                              !!>> HC 12-2-2021
-           aa=nodeo(i)%add; bb=nodeo(j)%add  ! previous values RZ 30-5-17                              !!>>HC 15-2-2021
-           node(i)%add=nodeo(i)%add+a;node(j)%add=nodeo(j)%add+b                                       !!>>HC 15-2-2021
+           aaa=node(i)%add ; bbb=node(j)%add  ! previous values RZ 30-5-17                             !!>> HC 12-2-2021
+           aa=nodeo(i)%add ; bb=nodeo(j)%add  ! previous values RZ 30-5-17                             !!>>HC 15-2-2021
+           node(i)%add=nodeo(i)%add+ab
+           node(j)%add=nodeo(j)%add+ba                                                                  !!>>HC 15-2-2021
            ! RZ gradual 30-5-17                                                                        !!>>HC 15-2-2021
            if (node(i)%add>aaa+aa*(icr).and.aa.ne.0) node(i)%add=aaa+aa*(icr)                          !!>>HC 15-2-2021
            if (node(j)%add>bbb+bb*(icr).and.bb.ne.0) node(j)%add=bbb+bb*(icr)                          !!>>HC 15-2-2021
            if (node(i)%add<aaa-aa*(icr).and.aa.ne.0) node(i)%add=aaa-aa*(icr)                          !!>>HC 15-2-2021
            if (node(j)%add<bbb-bb*(icr).and.bb.ne.0) node(j)%add=bbb-bb*(icr)                          !!>>HC 15-2-2021
            if (node(i)%add<0) node(i)%add=0.0;if (node(j)%add<0) node(j)%add=0.0                       !!>>HC 15-2-2021
-
-!           if(node(i)%add.le.node(i)%eqd*1.0) node(i)%add=node(i)%eqd*1.0  !pfh 9-6-15                 !!>>HC 15-2-2021
-!           if(node(i)%add.ge.node(i)%eqd*1.2) node(i)%add=node(i)%eqd*1.2  !pfh 9-6-15                 !!>>HC 15-2-2021
-!           if(node(j)%add.le.node(j)%eqd*1.0) node(j)%add=node(j)%eqd*1.0  !pfh 9-6-15                 !!>>HC 15-2-2021
-!           if(node(j)%add.ge.node(j)%eqd*1.2) node(j)%add=node(j)%eqd*1.2  !pfh 9-6-15                 !!>>HC 15-2-2021
-           
-!        else                                                                                           !!>>HC 15-2-2021
-           
-!           icr=icrr ! RZ 30-5-17                                                                       !!>>HC 15-2-2021
-!           aaa=node(i)%add; bbb=node(j)%add  ! previous values RZ 30-5-17                              !!>>HC 15-2-2021
-!           aa=nodeo(i)%add; bb=nodeo(j)%add  ! previous values RZ 30-5-17                              !!>>HC 15-2-2021
-!           node(i)%add=nodeo(i)%add ; node(j)%add=nodeo(j)%add !pfh 9-6-15                             !!>>HC 15-2-2021
-          ! RZ gradual 30-5-17                                                                         !!>>HC 15-2-2021
-!           if (node(i)%add>aaa+aa*(icr).and.aa.ne.0) node(i)%add=aaa+aa*(icr)                          !!>>HC 15-2-2021
-!           if (node(j)%add>bbb+bb*(icr).and.bb.ne.0) node(j)%add=bbb+bb*(icr)                          !!>>HC 15-2-2021
-!           if (node(i)%add<aaa-aa*(icr).and.aa.ne.0) node(i)%add=aaa-aa*(icr)                          !!>>HC 15-2-2021
-!           if (node(j)%add<bbb-bb*(icr).and.bb.ne.0) node(j)%add=bbb-bb*(icr)                          !!>>HC 15-2-2021
-                                     
+          end if
         end if
 
-  !      if(node(i)%add.le.node(i)%eqd*1.0) node(i)%add=node(i)%eqd*1.0  !pfh 9-6-15 1.5                !!>>HC 15-2-2021
-  !      if(node(i)%add.ge.node(i)%eqd*1.2) node(i)%add=node(i)%eqd*1.2  !pfh 9-6-15 2.5                !!>>HC 15-2-2021
-  !      if(node(j)%add.le.node(j)%eqd*1.0) node(j)%add=node(j)%eqd*1.0  !pfh 9-6-15                    !!>>HC 15-2-2021
-  !      if(node(j)%add.ge.node(j)%eqd*1.2) node(j)%add=node(j)%eqd*1.2  !pfh 9-6-15                    !!>>HC 15-2-2021
         if (npag(7)>0) then;ii=7;a=0 ; b=0 ;                                                           !!>>HC 15-2-2021
         do k=1,npag(ii)                                                                                !!>>HC 15-2-2021
            kk=whonpag(ii,k) ; !wa in req-space units                                                   !!>>HC 15-2-2021
@@ -677,7 +731,7 @@ subroutine nexe_gradual !!>> HC 12-2-2021 This subrutine includes the code writt
         icr=icrr ! RZ 30-5-17                                                                          !!>> HC 12-2-2021
         aaa=node(i)%adh; bbb=node(j)%adh  ! previous values RZ 30-5-17                                 !!>> HC 12-2-2021
         aa=nodeo(i)%adh; bb=nodeo(j)%adh  ! previous values RZ 30-5-17                                 !!>> HC 12-2-2021
-        
+
         node(i)%adh=nodeo(i)%adh+a;node(j)%adh=nodeo(j)%adh+b                                          !!>> HC 12-2-2021
          
         ! RZ gradual 30-5-17                                                                           !!>> HC 12-2-2021
@@ -778,39 +832,6 @@ subroutine nexe_gradual !!>> HC 12-2-2021 This subrutine includes the code writt
         ! RZ end changes                                                                               !!>> HC 12-2-2021
         if (node(i)%hoo<0) node(i)%hoo=0.0;if (node(j)%hoo<0) node(j)%hoo=0.0;end if                   !!>> HC 12-2-2021
         
-        !if (npag(15)>0) then;ii=15;a=0 ; b=0 ; do k=1,npag(ii) ; kk=whonpag(ii,k) ; !wa in force units!!>> HC 15-2-2021 Epithelial cells have no pseudopodia
-        !  if (gex(i,kk)>0.0d0) then ; a=a+gex(i,kk)*gen(kk)%e(ii) ;endif;                             !!>> HC 15-2-2021 so noise related params cannot change
-        !  if (gex(j,kk)>0.0d0) then ; b=b+gex(j,kk)*gen(kk)%e(ii) ;endif;enddo;                       !!>> HC 15-2-2021 due to genes in these cells
-        !  ! Rz 18-5-17 makes node properties to change gradually?????                                 !!>> HC 15-2-2021
-        !  icr=icrr ! RZ 30-5-17                                                                       !!>> HC 15-2-2021
-        !  aaa=node(i)%mov; bbb=node(j)%mov  ! previous values RZ 30-5-17                              !!>> HC 15-2-2021
-        !  aa=nodeo(i)%mov; bb=nodeo(j)%mov  ! previous values RZ 30-5-17                              !!>> HC 15-2-2021
-        !  node(i)%mov=nodeo(i)%mov+a;node(j)%mov=nodeo(j)%mov+b                                       !!>> HC 15-2-2021
-        !  ! RZ gradual 30-5-17                                                                        !!>> HC 15-2-2021
-        !  if (node(i)%mov>aaa+aa*(icr).and.aa.ne.0) node(i)%mov=aaa+aa*(icr)                          !!>> HC 15-2-2021
-        !  if (node(j)%mov>bbb+bb*(icr).and.bb.ne.0) node(j)%mov=bbb+bb*(icr)                          !!>> HC 15-2-2021
-        !  if (node(i)%mov<aaa-aa*(icr).and.aa.ne.0) node(i)%mov=aaa-aa*(icr)                          !!>> HC 15-2-2021
-        !  if (node(j)%mov<bbb-bb*(icr).and.bb.ne.0) node(j)%mov=bbb-bb*(icr)                          !!>> HC 15-2-2021
-        !  if (node(i)%mov<0) node(i)%mov=0.0 ; if (node(j)%mov<0) node(j)%mov=0.0                     !!>> HC 15-2-2021
-        !end if                                                                                        !!>> HC 15-2-2021
-
-        !if (npag(16)>0) then;ii=16;a=0 ; b=0 ; do k=1,npag(ii) ; kk=whonpag(ii,k) ; !wa in req-space units !!>> HC 15-2-2021 
-        ! if (gex(i,kk)>0.0d0) then ; a=a+gex(i,kk)*gen(kk)%e(ii) ;endif;                              !!>> HC 15-2-2021
-        ! if (gex(j,kk)>0.0d0) then ; b=b+gex(j,kk)*gen(kk)%e(ii) ;endif                               !!>> HC 15-2-2021
-        ! enddo                                                                                        !!>> HC 15-2-2021
-        ! ! Rz 18-5-17 makes node properties to change gradually                                       !!>> HC 15-2-2021
-        ! icr=icrr ! RZ 30-5-17                                                                        !!>> HC 15-2-2021
-        ! aaa=node(i)%dmo; bbb=node(j)%dmo  ! previous values RZ 30-5-17                               !!>> HC 15-2-2021
-        ! aa=nodeo(i)%dmo; bb=nodeo(j)%dmo  ! previous values RZ 30-5-17                               !!>> HC 15-2-2021
-        ! node(i)%dmo=nodeo(i)%dmo+a;node(j)%dmo=nodeo(j)%dmo+b                                        !!>> HC 15-2-2021
-        ! ! RZ gradual 30-5-17                                                                         !!>> HC 15-2-2021
-        ! if (node(i)%dmo>aaa+aa*(icr).and.aa.ne.0) node(i)%dmo=aaa+aa*(icr)                           !!>> HC 15-2-2021
-        ! if (node(j)%dmo>bbb+bb*(icr).and.bb.ne.0) node(j)%dmo=bbb+bb*(icr)                           !!>> HC 15-2-2021
-        ! if (node(i)%dmo<aaa-aa*(icr).and.aa.ne.0) node(i)%dmo=aaa-aa*(icr)                           !!>> HC 15-2-2021
-        ! if (node(j)%dmo<bbb-bb*(icr).and.bb.ne.0) node(j)%dmo=bbb-bb*(icr)                           !!>> HC 15-2-2021
-        ! if (node(i)%dmo<0) node(i)%dmo=0.0;if (node(j)%dmo<0) node(j)%dmo=0.0                        !!>> HC 15-2-2021
-        !end if                                                                                        !!>> HC 15-2-2021
-
         if (npag(27)>0) then; ii=27;a=0 ; b=0 ; do k=1,npag(ii) ; kk=whonpag(ii,k) ; !wa in req-space units      !!>> HC 12-2-2021
           if (gex(i,kk)>0.0d0) then ; a=a+gex(i,kk)*gen(kk)%e(ii) ;endif;                              !!>> HC 12-2-2021
           if (gex(j,kk)>0.0d0) then ; b=b+gex(j,kk)*gen(kk)%e(ii) ;endif;enddo;                        !!>> HC 12-2-2021
@@ -833,17 +854,17 @@ subroutine nexe_gradual !!>> HC 12-2-2021 This subrutine includes the code writt
           enddo                                                                                        !!>> HC 12-2-2021
           ! Rz 18-5-17 makes node properties to change gradually                                       !!>> HC 12-2-2021
           icr=icrr ! RZ 30-5-17                                                                        !!>> HC 12-2-2021
-          aaa=node(i)%kvol; bbb=node(j)%kvol  ! previous values RZ 30-5-17                             !!>> HC 12-2-2021
-          aa=nodeo(i)%kvol; bb=nodeo(j)%kvol  ! previous values RZ 30-5-17                             !!>> HC 12-2-2021
-          node(i)%kvol=nodeo(i)%kvol+a;node(j)%kvol=nodeo(j)%kvol+b                                    !!>> HC 12-2-2021
+          aaa=node(i)%voc; bbb=node(j)%voc  ! previous values RZ 30-5-17                             !!>> HC 12-2-2021
+          aa=nodeo(i)%voc; bb=nodeo(j)%voc  ! previous values RZ 30-5-17                             !!>> HC 12-2-2021
+          node(i)%voc=nodeo(i)%voc+a;node(j)%voc=nodeo(j)%voc+b                                    !!>> HC 12-2-2021
           ! RZ gradual 30-5-17                                                                         !!>> HC 12-2-2021
-          if (node(i)%kvol>aaa+aa*(icr).and.aa.ne.0) node(i)%kvol=aaa+aa*(icr)                         !!>> HC 12-2-2021
-          if (node(j)%kvol>bbb+bb*(icr).and.bb.ne.0) node(j)%kvol=bbb+bb*(icr)                         !!>> HC 12-2-2021
-          if (node(i)%kvol<aaa-aa*(icr).and.aa.ne.0) node(i)%kvol=aaa-aa*(icr)                         !!>> HC 12-2-2021
-          if (node(j)%kvol<bbb-bb*(icr).and.bb.ne.0) node(j)%kvol=bbb-bb*(icr)                         !!>> HC 12-2-2021
-          if (node(i)%kvol<0) node(i)%kvol=0.0;if (node(j)%kvol<0) node(j)%kvol=0.0                    !!>> HC 12-2-2021
+          if (node(i)%voc>aaa+aa*(icr).and.aa.ne.0) node(i)%voc=aaa+aa*(icr)                         !!>> HC 12-2-2021
+          if (node(j)%voc>bbb+bb*(icr).and.bb.ne.0) node(j)%voc=bbb+bb*(icr)                         !!>> HC 12-2-2021
+          if (node(i)%voc<aaa-aa*(icr).and.aa.ne.0) node(i)%voc=aaa-aa*(icr)                         !!>> HC 12-2-2021
+          if (node(j)%voc<bbb-bb*(icr).and.bb.ne.0) node(j)%voc=bbb-bb*(icr)                         !!>> HC 12-2-2021
+          if (node(i)%voc<0) node(i)%voc=0.0;if (node(j)%voc<0) node(j)%voc=0.0                    !!>> HC 12-2-2021
         end if                                                                                         !!>> HC 12-2-2021
-          
+
         if(node(i)%erp>10*node(i)%est) node(i)%erp=10*node(i)%est                                      !!>> HC 12-2-2021
         if(node(i)%est>500) node(i)%est=500                                                            !!>> HC 12-2-2021
         if(node(i)%erp>500) node(i)%erp=500                                                            !!>> HC 12-2-2021
@@ -877,13 +898,33 @@ subroutine nexe_gradual !!>> HC 12-2-2021 This subrutine includes the code writt
            node(i)%cod=0                                                                               !!>> HC 12-2-2021
         end if                                                                                         !!>> HC 12-2-2021
 
-        a=nodeo(i)%add-node(i)%eqd !>>>Miquel9-9-15                                                   !!>> HC 12-2-2021
+        ! >>> Is 22-9-24
+        if (ffu(32)==1) then
+          if (node(i)%cod<mincod*orival_other) then
+            node(i)%cod=mincod*orival_other
+          else
+            if (node(i)%cod>maxcod*orival_other) node(i)%cod=maxcod*orival_other
+          end if
+        end if
+        ! <<< Is 22-9-24
+
+        ab=nodeo(i)%add-node(i)%eqd !>>>Miquel9-9-15                                                   !!>> HC 12-2-2021
         node(i)%eqd=node(i)%grd+node(i)%cod  !now req is the sum of the req components: growth/apoptosis and contraction/deformation  !!>> HC 12-2-2021
         if(node(i)%eqd>df_reqmax) node(i)%eqd=df_reqmax !put an upper an lower boundary on how much    !>>Miquel28-7-14                 !!>> HC 12-2-2021
         if(node(i)%eqd<reqmin) node(i)%eqd=reqmin !the req can be deformed !NEW *5 deleted                !!>> HC 12-2-2021
-        node(i)%add=node(i)%eqd+a !>>>Miquel9-9-15                                                        !!>> HC 15-2-2021 it is node not nodeo
-!        if(node(i)%add.le.node(i)%eqd*1.0) node(i)%add=node(i)%eqd*1.0  !pfh 9-6-15                       !!>> HC 15-2-2021
-!        if(node(i)%add.ge.node(i)%eqd*1.2) node(i)%add=node(i)%eqd*1.2  !pfh 9-6-15                       !!>> HC 15-2-2021
+
+        !>>> 23-9-24
+        if (ffu(32)==1) then
+          if (node(i)%eqd<mineqd*orival_other) then
+            node(i)%eqd=mineqd*orival_other
+          else
+            if (node(i)%eqd>maxeqd*orival_other) node(i)%eqd=maxeqd*orival_other
+          end if
+        end if
+        !<<< 23-9-24
+
+        if (ffu(33)==1) node(i)%add=node(i)%eqd+ab  ! >>> Is 20-9-24!>>>Miquel9-9-15                                                        !!>> HC 15-2-2021 it is node not nodeo
+
         !pfh no differ 26-11-15                                                                           !!>> HC 15-2-2021
         if (npag(6)>0) then;ii=6;a=0 ; do k=1,npag(ii) ; kk=whonpag(ii,k) ; if (gex(i,kk)>0.0d0) then ;   !!>> HC 15-2-2021 
            a=a+gex(i,kk)*gen(kk)%e(ii) ;endif;enddo                                                       !!>> HC 15-2-2021
@@ -891,13 +932,11 @@ subroutine nexe_gradual !!>> HC 12-2-2021 This subrutine includes the code writt
            icr=icrr ! RZ 30-5-17                                                                          !!>> HC 15-2-2021
            aaa=node(i)%add                                                                                !!>> HC 15-2-2021
            aa=nodeo(i)%add  ! previous values RZ 30-5-17                                                  !!>> HC 15-2-2021
-           node(i)%add=nodeo(i)%add+a                                                                     !!>> HC 15-2-2021
+           node(i)%add=nodeo(i)%add+ab                                                                     !!>> HC 15-2-2021
            ! RZ gradual 30-5-17                                                                           !!>> HC 15-2-2021
            if (node(i)%add>aaa+aa*(icr).and.aa.ne.0) node(i)%add=aaa+aa*(icr)                             !!>> HC 15-2-2021
            if (node(i)%add<aaa-aa*(icr).and.aa.ne.0) node(i)%add=aaa-aa*(icr)                             !!>> HC 15-2-2021
            if (node(i)%add<0) node(i)%add=0.0                                                             !!>> HC 15-2-2021
-!           if(node(i)%add.le.node(i)%eqd*1.0) node(i)%add=node(i)%eqd*1.0  !pfh 9-6-15                    !!>> HC 15-2-2021
-!           if(node(i)%add.ge.node(i)%eqd*1.2) node(i)%add=node(i)%eqd*1.2  !pfh 9-6-15                    !!>> HC 15-2-2021
         else                                                                                              !!>> HC 15-2-2021
            node(i)%add=nodeo(i)%add !pfh 9-6-15                                                           !!>> HC 15-2-2021
         end if                                                                                            !!>> HC 15-2-2021
@@ -1069,6 +1108,12 @@ subroutine filter  !!>> HC 12-2-2021 This subroutine applies filters if the corr
   real*8, dimension (1:5) :: min_glim, max_glim                                !!>> HC 11-11-2021
   integer :: sumneigh, many, oripich                                           !!>> HC 14-12-2021
   real*8 :: percent                                                            !!>> HC 14-12-2021
+  integer :: volumen                                                           !!>> AL 11-4-25
+  integer ::cuantosnd
+  integer :: dieornot                                                          !!>> AL 23-06-2024
+  logical :: exist
+
+
 
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!>> HC 17-9-2020
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Calculating displacements!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!>> HC 17-9-2020
@@ -1255,34 +1300,65 @@ subroutine filter  !!>> HC 12-2-2021 This subroutine applies filters if the corr
         endif
      endif       
 
-
+    !!>>AL 15-6-24: The following is a nasty overload of an existing filter. I don't want to deal with the retrocompatibility issues
+    ! that surge when adding a new filter, that's why I decided to sin. Forgive me, lord. 
+    ! WHICHEND 11:: if== 3 ASSYMETRY IS TO BIG (>5%)
+    if (ffufi(11,1)==3)then                                                                                     
+      dieornot = 0       
+      if(nd >= 1000) then !AL >> 3-07-24: this is arbitrary; heuristically, big morphogenesis starts at this size (or not, it depends on dev. mechanisms really...)
+        inquire(file=trim(carg)//"-dev_assy.txt", exist=exist)
+        if(exist)then
+          open(6021, file=trim(carg)//"-dev_assy.txt")
+            read(6021, *) cuantosnd
+          close(6021)
+          if((nd - (cuantosnd+ffufi(11,3))) >= 0)then
+            open(6021, file=trim(carg)//"-dev_assy.txt", action="write")
+              write(6021, *) nd
+            close(6021)
+            call assymetry_save(dieornot) 
+          end if
+        else
+          open(6021, file=trim(carg)//"-dev_assy.txt", action="write")
+            write(6021, *) nd
+          close(6021)
+          call assymetry_save(dieornot) 
+        end if
+        if (dieornot == 1) then
+          whichend=11                                                           
+          open(891, file='individual.datfitness')                         !!>> AL 2-07-24 We want to know
+            write(891,*) 1000                                             !!>> AL 2-07-24 why we killed this indv
+          close(891)   
+          goto 171                                                                      
+        end if
+      end if
+    end if          
 
      !!!!!!!!!!!!!!!!!!!!!!!THIS COMES FROM ENSEMBLE MODE (HAGOLANI 2018)!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!>> HC 17-9-2020
-     ! WHICHEND 12: BROKEN MORPHOLOGIES   !!!!!!!!!WE HAVE TO CHECK THESE!!!!!!!!!!!!!!!!!!
-     if (ffufi(12,1)==1.and.ffufi(12,3)>0)then                        !!>> HC 14-12-2021
-        if (mod(getot,ffufi(12,3)).eq.0)then                          !!>> HC 14-12-2021
-           oripich=0; percent=0.0d0; many=0                           !!>> HC 24-9-2021 Here we calculate the original number of epithelial nodes
-           do ich=1,nd                                                !!>> HC 24-9-2021
-              if (nodeo(ich)%tipus.ge.3)cycle                         !!>> HC 24-9-2021 WARNING 1 we are assuming that the epitelial cells are listed BEFORE the mesenchyme
-              if (nodeo(ich)%icel>oripich) oripich=nodeo(ich)%icel    !!>> HC 24-9-2021 the original number of epithelial nodes is then the maximum number of epitelial cells
-           enddo                                                      !!>> HC 24-9-2021 in the nodeo list (WARNING 2 assuming single_node cells)
-           oripich=oripich*2                                          !!>> HC 14-12-2021 original number of epitelial nodes        
-           do ich=1,nd                                                !!>> HC 14-12-2021 We llok all the epithelial nodes
-              if(node(ich)%tipus.ge.3)cycle                           !!>> HC 14-12-2021
-              sumneigh=0                                              !!>> HC 14-12-2021
-              do jch=1,nneigh(ich)                                    !!>> HC 14-12-2021 Count the neighbors that are epithelial too
-                 if(node(neigh(ich,jch))%tipus.ge.3)cycle             !!>> HC 14-12-2021
-                 sumneigh=sumneigh+1                                  !!>> HC 14-12-2021
-              enddo                                                   !!>> HC 14-12-2021
-              if(sumneigh<3) many=many+1                              !!>> HC 14-12-2021 We consider the nodes with less than 3 neighbors broken
-           enddo                                                      !!>> HC 14-12-2021 (empirically calculated)
-           percent=real(many)/real(oripich)                           !!>> HC 14-12-2021
-           if (percent>0.20d0)then                                    !!>> HC 14-12-2021 This is an empirically calculated limit
-              whichend=12                                             !!>> HC 14-12-2021 Limit surpased, we kill this simulation
-              goto 171                                                !!>> HC 14-12-2021
-           endif                                                      !!>> HC 14-12-2021
-        endif                                                         !!>> HC 14-12-2021       
-     endif                                                            !!>> HC 14-12-2021
+    !  ! WHICHEND 12: BROKEN MORPHOLOGIES   !!!!!!!!!WE HAVE TO CHECK THESE!!!!!!!!!!!!!!!!!!
+    !  if (ffufi(12,1)==1.and.ffufi(12,3)>0)then                        !!>> HC 14-12-2021
+    !     if (mod(getot,ffufi(12,3)).eq.0)then                          !!>> HC 14-12-2021
+    !        oripich=0; percent=0.0d0; many=0                           !!>> HC 24-9-2021 Here we calculate the original number of epithelial nodes
+    !        do ich=1,nd                                                !!>> HC 24-9-2021
+    !           if (nodeo(ich)%tipus.ge.3)cycle                         !!>> HC 24-9-2021 WARNING 1 we are assuming that the epitelial cells are listed BEFORE the mesenchyme
+    !           if (nodeo(ich)%icel>oripich) oripich=nodeo(ich)%icel    !!>> HC 24-9-2021 the original number of epithelial nodes is then the maximum number of epitelial cells
+    !        enddo                                                      !!>> HC 24-9-2021 in the nodeo list (WARNING 2 assuming single_node cells)
+    !        oripich=oripich*2                                          !!>> HC 14-12-2021 original number of epitelial nodes        
+    !        do ich=1,nd                                                !!>> HC 14-12-2021 We llok all the epithelial nodes
+    !           if(node(ich)%tipus.ge.3)cycle                           !!>> HC 14-12-2021
+    !           sumneigh=0                                              !!>> HC 14-12-2021
+    !           do jch=1,nneigh(ich)                                    !!>> HC 14-12-2021 Count the neighbors that are epithelial too
+    !              if(node(neigh(ich,jch))%tipus.ge.3)cycle             !!>> HC 14-12-2021
+    !              sumneigh=sumneigh+1                                  !!>> HC 14-12-2021
+    !           enddo                                                   !!>> HC 14-12-2021
+    !           if(sumneigh<3) many=many+1                              !!>> HC 14-12-2021 We consider the nodes with less than 3 neighbors broken
+    !        enddo                                                      !!>> HC 14-12-2021 (empirically calculated)
+    !        percent=real(many)/real(oripich)                           !!>> HC 14-12-2021
+    !        if (percent>0.20d0)then                                    !!>> HC 14-12-2021 This is an empirically calculated limit
+    !           whichend=12                                             !!>> HC 14-12-2021 Limit surpased, we kill this simulation
+    !           goto 171                                                !!>> HC 14-12-2021
+    !        endif                                                      !!>> HC 14-12-2021
+    !     endif                                                         !!>> HC 14-12-2021       
+    !  endif                                                            !!>> HC 14-12-2021
 !     if (ffufi(12,1)==1.and.ffufi(12,3)>0)then                                                                  !!>> HC 20-2-2021
 !        if (mod(getot,ffufi(12,3)).eq.0)then                                                                    !!>> HC 12-7-2021
 !           threshdotp=4                                                                                         !!>> TT 5-3-2021
@@ -1316,7 +1392,21 @@ subroutine filter  !!>> HC 12-2-2021 This subroutine applies filters if the corr
 !           endif                                                                                                    !!>> HC 17-9-2020
 !        endif
 !     endif                                                                                                      !!>> HC 17-9-2020
-  
+    
+    !! WHICHEND 12: BROKEN MORPHOLOGIES   !!!!!!!!!WE HAVE TO CHECK THESE!!!!!!!!!!!!!!!!! !!>> AL 11-4-25: The code above doesn't work. I will just make my own filter
+    if (ffufi(12,1)==1.and.ffufi(12,3)>0)then                        
+      if (mod(getot,ffufi(12,3)).eq.0)then
+        call epitelial_hole(volumen)
+        if(volumen < 100)then  
+          open(891, file='individual.datfitness')                         
+            write(891,*) 1000                                             
+          close(891) 
+          whichend=12                                             !!>> HC 14-12-2021 Limit surpased, we kill this simulation
+          goto 171                                                !!>> HC 14-12-2021
+        end if 
+      endif                                                              
+    endif     
+
      !!WHICHEND 13: BLACK HOLES
      if (ffufi(13,1)==1.and.ffufi(13,3)>0)then                                                                  !!>> HC 20-2-2021
         if (mod(getot,ffufi(13,3)).eq.0)then                                                                    !!>> HC 20-2-2021 
@@ -1445,7 +1535,7 @@ return !X! THIS IS THE END         !!>> HC 2-7-2020
   
 171  print *,""                                                                                                 !!>> HC 18-9-2020
      if (ffu(22)==0)then                                                                                           !!>> HC 2-12-2020  Silent mode does not print this
-         print *," THIS IS THE END all cells are differentiated and then the simulations stop",trim(carg)          !!>> HC 17-11-2020
+         print *," THIS IS THE EEND all cells are differentiated and then the simulations stop",trim(carg)          !!>> HC 17-11-2020
          print *,""                                                                                                !!>> HC 17-11-2020
          print*,"reason to end:",whichend                                                                          !!>> HC 17-11-2020
      endif                                                                                                         !!>> HC 2-12-2020

@@ -30,6 +30,7 @@ integer,public, allocatable  :: borderface(:,:)  !>>Miquel3-2-14
 integer,public               :: nborder
 real*8 ,private              :: maxlen    ! >>> Is 7-2-15
 real*8 ,parameter            :: arrel_de_dos=1.414213562d0 
+real*8 ,public, allocatable  :: alldistances(:,:)
 
 contains
 
@@ -140,48 +141,42 @@ subroutine neighbor_build !this subroutine is called at each iteration to assess
   urv=1.0d0/rv
 
   !THIS IS JUST FOR CLARITY, TO SIMPLIFY EACH SUBROUTINE AND MAKE IT MORE READEABLE 
-  if (ffu(9)==0) then              !!>> HC 14-1-2021
+  if (ffu(9)==0.or.ffu(9)>1) then ! >>> Is 20-9-24              !!>> HC 14-1-2021
      if (ffu(8)==0) then !normal neighboring, extensive search of the boxes
-        if (ffu(2)==0) then
-           if (ffu(23)==1) then        !!>> HC 14-1-2021
-              urv=1.d0/(arrel_de_dos*rv+1d-3) ! beware, that could produce troubles, somehow, I have not check it carefully
+       if (ffu(23)==1) then        !!>> HC 14-1-2021
+         urv=1.d0/(arrel_de_dos*rv+1d-3) ! beware, that could produce troubles, somehow, I have not check it carefully
                                             ! COMMENT: that was mildly wrong (or just inefficient) in all previous versions
-              call iniboxes_p
-              if (ffu(24)==1) then
-                 if (ffu(17)==0) then
-                    call neighbor_build_complexneigh
-                 else
-                    call neighbor_build_complexneigh_inter_other_side_epi
-                 end if
-              else
-                 print *,"The algorithm to recover neighbors is not implemented yet with extended neighbording"
-                 stop
-              end if
-           else  
-              urv=1.0d0/(rv+1d-3)
-              call iniboxes_p
-              if (ffu(17)==0) then
-                 call neighbor_build_simpleneigh
-              else
-                 call neighbor_build_simpleneigh_inter_other_side_epi
-              end if    
+         call iniboxes_p
+         if (ffu(24)==1) then
+           if (ffu(17)==0) then
+             call neighbor_build_complexneigh
+           else
+             call neighbor_build_complexneigh_inter_other_side_epi
            end if
-        else
-          print *,"SORRY,..., GABRIEL IS NOT IMPLEMENTED WITH THOSE FFUs, BUT IT IS EASY TO DO IF YOU WANT"
-          stop
+             else
+               print *,"The algorithm to recover neighbors is not implemented yet with extended neighbording"
+             stop
+           end if
+         else  
+           urv=1.0d0/(rv+1d-3)
+           call iniboxes_p
+           if (ffu(17)==0) then
+             call neighbor_build_simpleneigh
+           else
+             call neighbor_build_simpleneigh_inter_other_side_epi
+           end if    
         end if
      else
         urv=1.0d0/(rv+1d-3)
         call iniboxes_p
-        if (ffu(2)==0) then !no GABRIEL
-          call neighbor_build_triang_nogabriel    
-        else
-          call neighbor_build_triang_gabriel
-        end if
+        call neighbor_build_triang_nogabriel    
      end if 
   else
      call neighbor_build_old
   end if
+
+  if (ffu(2)==1) call gabriel
+
 end subroutine
 
 !*************************************************************************************************************************************************************************
@@ -206,7 +201,7 @@ subroutine neighbor_build_node(i)
   urv=1.0d0/a
 
   !THIS IS JUST FOR CLARITY, TO SIMPLIFY EACH SUBROUTINE AND MAKE IT MORE READEABLE 
-  if (ffu(9)==0) then        !!>> HC 14-1-2021
+  if (ffu(9)==0.or.ffu(9)>1) then !>>> Is 20-9-24        !!>> HC 14-1-2021
     if (ffu(8)==0) then !normal neighboring, extensive search of the boxes
       if (ffu(2)==0) then
         if (ffu(23)==1) then  !!>> HC 14-1-2021
@@ -227,8 +222,7 @@ subroutine neighbor_build_node(i)
           end if    
         end if
       else
-        print *,"SORRY,..., GABRIEL IS NOT IMPLEMENTED WITH THOSE FFUs, BUT IT IS EASY TO DO IF YOU WANT"
-        stop
+        call neighbor_build_node_old(i) ! >>> Is 2-10-24 I did not bother, it does not make a difference
       end if
     else
       urv=1.0d0/(rv+1d-3)    
@@ -783,9 +777,8 @@ end subroutine
 
 subroutine neighbor_build_simpleneigh            ! ALL NEIGHBORS INTERACT IN THE SAME WAY, EXCEPT WE DO NOT ALLOW INTERACTION OF NODES FROM DIFFERENT SIDES OF THE EPITHELIUM
 
-integer:: ivv,ii1,ii2,ii3,nbo,iii1,iii2,iii3,ie,ierr,ij,ik,jk,iv
+integer:: ivv,ii1,ii2,ii3,nbo,iii1,iii2,iii3,ie,ierr,ij,ik,jk,iv,kl
 real*8:: ix,iy,iz,dist,udist,nbh
-
 integer::tipi  !>>Miquel31-12-14
 real*8::dai    !>>Miquel31-12-14
 real*8::jx,jy,jz,cx,cy,cz  !>>Miquel6-3-14
@@ -793,6 +786,7 @@ integer sneigh(mnn_dynam),trans_neigh(nd,mnn_dynam)
 real*8 sdneigh(mnn_dynam),trans_dneigh(nd,mnn_dynam)
 integer::snneigh
 
+distfordelta = 1000  !!>> AL 8-4-25
   ! ASSUMPTION: WE ASSUME THAT BOXES ARE LARGE ENOUGH SO THAT DIFFUSION CAN ONLY HAPPEN TO NEIGHBOR BOXES (THAT IS REALISTIC IN MOST CASES AS LONG AS THERE ARE NO LARGE CAVITIIES
   
 !  neigh=0  ! 4-3-2020
@@ -801,22 +795,18 @@ integer::snneigh
 
   ! main node loop in this subroutine
   do i=1,nd
-      
     ix=node(i)%x     ; iy=node(i)%y     ; iz=node(i)%z   
     ii1=nint(iz*urv) ; ii2=nint(iy*urv) ; ii3=nint(ix*urv)
     ivv=node(i)%altre
-
     ! temporal neigh and dneigh
     snneigh=0
     sneigh=0 
     sdneigh=0d0
-
     !if(node(i)%tipus<3)then
     !  snneigh=1
     !  sneigh(1)=ivv
     !  sdneigh(1)=sqrt((node(ivv)%x-ix)**2+(node(ivv)%y-iy)**2+(node(ivv)%z-iz)**2)
     !end if
-
     tipi=node(i)%tipus
     dai=node(i)%add
     do i1=-1,1 
@@ -824,18 +814,19 @@ integer::snneigh
       do i2=-1,1
         iii2=ii2+i2
         do i3=-1,1
-!          iii3=ii3+i3
           ie=boxes(ii3+i3,iii2,iii1)
           do while(ie.ne.0)
-            !if (ie==i) then ; ie=list(ie) ; cycle ; end if
-            !if (ie==ivv) then ; ie=list(ie) ; cycle ; end if
-            if (node(ie)%tipus==1.and.tipi==2) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15 THAT LINE IS DIFFERENT WITH THE _inter_other_side_epi VERSION OF THE SUBROUTINE
-            if (node(ie)%tipus==2.and.tipi==1) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15 THAT LINE IS DIFFERENT WITH THE _inter_other_side_epi VERSION OF THE SUBROUTINE
+            if (tipi==2.and.node(ie)%tipus==1) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15 THAT LINE IS DIFFERENT WITH THE _inter_other_side_epi VERSION OF THE SUBROUTINE
+            if (tipi==1.and.node(ie)%tipus==2) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15 THAT LINE IS DIFFERENT WITH THE _inter_other_side_epi VERSION OF THE SUBROUTINE
             dist=(node(ie)%x-ix)**2+(node(ie)%y-iy)**2+(node(ie)%z-iz)**2
+            
+            if(i .ne. ie)then 
+              if(dist < distfordelta) distfordelta = dist                          !!>> AL 8-4-25
+            end if 
+            
             a=(dai+node(ie)%add)**2
-            if(dist>a)then ; ie=list(ie) ; cycle ; end if             
+            if(dist>a) then ; ie=list(ie) ; cycle ; end if             
             if (ie==i) then ; ie=list(ie) ; cycle ; end if                 
-
             snneigh=snneigh+1
             sneigh(snneigh)=ie
             sdneigh(snneigh)=sqrt(dist)
@@ -844,20 +835,128 @@ integer::snneigh
         end do
       end do
     end do
+    ! here we transfer the neighbors of i to a pre-neigh neighbor
+    if(snneigh>omnn) omnn=snneigh
+    nneigh(i)=snneigh
+    trans_neigh(i,:omnn)=sneigh(:omnn)
+    trans_dneigh(i,:omnn)=sdneigh(:omnn)     
+  end do  
 
-     ! here we transfer the neighbors of i to a pre-neigh neighbor
-     if(snneigh>omnn) omnn=snneigh
-     nneigh(i)=snneigh
-     trans_neigh(i,:omnn)=sneigh(:omnn)
-     trans_dneigh(i,:omnn)=sdneigh(:omnn)     
-    end do  
-    if(allocated(neigh)) deallocate(neigh)
-    if(allocated(dneigh)) deallocate(dneigh)
-    allocate(neigh(nda,omnn),dneigh(nda,omnn))
-    neigh(1:nd,1:omnn)=trans_neigh(1:nd,1:omnn)
-    dneigh(1:nd,1:omnn)=trans_dneigh(1:nd,1:omnn)
+  if(allocated(neigh)) deallocate(neigh)
+  if(allocated(dneigh)) deallocate(dneigh)
+  allocate(neigh(nda,omnn*4),dneigh(nda,omnn*4))
+  neigh(1:nd,1:omnn)=trans_neigh(1:nd,1:omnn)
+  dneigh(1:nd,1:omnn)=trans_dneigh(1:nd,1:omnn)
+    
+  distfordelta = sqrt(distfordelta)                                              !!>> AL 8-4-25
+  
+  ! print*,"distfordelta with wierd algorithm",distfordelta
 
-end subroutine
+
+  ! distfordelta = 1000
+  ! !only for test
+  ! do i = 1,nd
+  !   ix=node(i)%x     ; iy=node(i)%y     ; iz=node(i)%z   
+  !   do ie = 1,nd
+  !     dist=(node(ie)%x-ix)**2+(node(ie)%y-iy)**2+(node(ie)%z-iz)**2
+  !     if(i .ne. ie)then 
+  !       if(dist < distfordelta) distfordelta = dist                          !!>> AL 8-4-25
+  !     end if 
+  !   end do 
+  ! end do 
+  ! distfordelta = sqrt(distfordelta)                                              !!>> AL 8-4-25
+
+  ! print*,"distfordelta with my algo ",distfordelta
+
+
+end subroutine neighbor_build_simpleneigh
+
+!*************************************************************************************************************************************************************************
+!*************************************************************************************************************************************************************************
+!*************************************************************************************************************************************************************************
+
+           !GABRIEL    alone IS 3-4-25
+
+!*************************************************************************************************************************************************************************
+!*************************************************************************************************************************************************************************
+!*************************************************************************************************************************************************************************
+
+subroutine gabriel 
+integer i,j,k,ii,jj,kk,ivv,l
+real*8 a,b,c,ix,iy,iz,jx,jy,jz,cx,cy,cz,d
+integer,allocatable::trans_neigh(:)
+real*8,allocatable::trans_dneigh(:)
+integer::snneigh
+
+       allocate(trans_neigh(omnn),trans_dneigh(omnn))
+
+      do i=1,nd
+        !Screening by Gabriel graph !>>Miquel6-3-14
+        !A neighbor connection is deleted if the sphere which diameter is the vector connecting the two nodes contains any other node
+        !Ordering the neighors with increasing distance
+
+        snneigh=nneigh(i)
+        ix=node(i)%x     ; iy=node(i)%y     ; iz=node(i)%z   
+        ivv=node(i)%altre
+        trans_neigh=0
+        trans_dneigh=0
+        trans_neigh(1:snneigh)=neigh(i,1:snneigh)
+        trans_dneigh(1:snneigh)=dneigh(i,1:snneigh)
+
+
+        !sorting algorithm by selection, it's ok
+        do j=1,snneigh-1  
+          b=trans_dneigh(j)
+          ii=0
+          do k=j+1,snneigh
+            c=trans_dneigh(k)
+             if(b>c)then
+              ii=k ; b=trans_dneigh(k)
+            end if
+          end do
+          if(ii/=0)then
+            kk=trans_neigh(ii) ; c=trans_dneigh(ii) !the swap
+            trans_neigh(ii)=trans_neigh(j) ; trans_dneigh(ii)=trans_dneigh(j)
+            trans_neigh(j)=kk ; trans_dneigh(j)=c
+          end if
+        end do
+
+        !the screening
+        ii=0 !the number of eliminated connections
+        do j=snneigh,1,-1
+          jj=trans_neigh(j)
+          if(jj==ivv) cycle
+          a=trans_dneigh(j)*0.5*screen_radius !the radius of the sphere
+          jx=node(jj)%x ; jy=node(jj)%y ; jz=node(jj)%z
+          cx=(ix+jx)*0.5 ; cy=(iy+jy)*0.5 ; cz=(iz+jz)*0.5 !the midpoint
+          do k=j-1,1,-1
+            kk=trans_neigh(k)
+            d=sqrt((cx-node(kk)%x)**2+(cy-node(kk)%y)**2+(cz-node(kk)%z)**2)
+            if(d<a)then !there is one node within the sphere, we must delete this connection
+              do l=j,snneigh-ii-1
+                trans_neigh(l)=trans_neigh(l+1)
+                trans_dneigh(l)=trans_dneigh(l+1)
+              end do
+              trans_neigh(nneigh(i)-ii)=0
+              trans_dneigh(nneigh(i)-ii)=0
+              ii=ii+1
+              exit
+            end if
+          end do
+        end do
+        snneigh=snneigh-ii
+        nneigh(i)=snneigh
+        neigh(i,1:snneigh)=trans_neigh(1:snneigh)
+        dneigh(i,1:snneigh)=trans_dneigh(1:snneigh)
+        neigh(i,snneigh+1:omnn)=0
+        dneigh(i,snneigh+1:omnn)=0        
+      end do
+
+  deallocate(trans_neigh)
+  deallocate(trans_dneigh)
+  
+end subroutine gabriel
+
 
 !*************************************************************************************************************************************************************************
 !*************************************************************************************************************************************************************************
@@ -917,8 +1016,8 @@ integer::snneigh
           do while(ie.ne.0)
             !if (ie==i) then ; ie=list(ie) ; cycle ; end if
             !if (ie==ivv) then ; ie=list(ie) ; cycle ; end if
-            !if (node(ie)%tipus==1.and.tipi==2) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15 THAT LINE IS DIFFERENT WITH THE _inter_other_side_epi VERSION OF THE SUBROUTINE
-            !if (node(ie)%tipus==2.and.tipi==1) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15 THAT LINE IS DIFFERENT WITH THE _inter_other_side_epi VERSION OF THE SUBROUTINE
+            if (node(ie)%tipus==1.and.tipi==2) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15 THAT LINE IS DIFFERENT WITH THE _inter_other_side_epi VERSION OF THE SUBROUTINE
+            if (node(ie)%tipus==2.and.tipi==1) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15 THAT LINE IS DIFFERENT WITH THE _inter_other_side_epi VERSION OF THE SUBROUTINE
             dist=((node(ie)%x-ix)**2+(node(ie)%y-iy)**2+(node(ie)%z-iz)**2)
             a=(dai+node(ie)%add)**2
             if(dist>a)then ; ie=list(ie) ; cycle ; end if             
@@ -947,6 +1046,7 @@ integer::snneigh
     dneigh(1:nd,1:omnn)=trans_dneigh(1:nd,1:omnn)
 
 end subroutine
+
 
 !*************************************************************************************************************************************************************************
 !*************************************************************************************************************************************************************************
@@ -1165,6 +1265,7 @@ if (ffu(9)==0) then
 end if
 end subroutine
 
+
 !*************************************************************************************************************************************************************************
 !*************************************************************************************************************************************************************************
 !*************************************************************************************************************************************************************************
@@ -1229,7 +1330,7 @@ integer::snneigh
       vm(i)=i
     end do !;print*,"pillat pre delau"
     !calling the triangulation subroutine
-    call dtriw3(npt, sizht, maxbf, maxfc, vcl, vm, nbf, nfc, nface, ntetra, bf, fc, ht, ierr)
+    !call dtriw3(npt, sizht, maxbf, maxfc, vcl, vm, nbf, nfc, nface, ntetra, bf, fc, ht, ierr)
     !if(ierr/=0)then; print*,"error in the triangulation, avort or something",ierr,getot ; endif !call exit(24); end if
     !translating the ouptut into a neighbor matrix
 
@@ -1305,7 +1406,7 @@ integer::snneigh
     neigh(1:nd,1:omnn)=trans_neigh(1:nd,1:omnn)
     dneigh(1:nd,1:omnn)=trans_dneigh(1:nd,1:omnn)
 
-if (ffu(9)==0) then
+if (ffu(9)==0.or.ffu(9)>1) then ! >>> Is 20-9-24
   if(allocated(trans_neigh)) deallocate(trans_neigh)
   if(allocated(trans_dneigh)) deallocate(trans_dneigh)
   if(allocated(sdneigh)) deallocate(sdneigh)
@@ -1495,8 +1596,8 @@ integer::snneigh
            do while(ie.ne.0)
              if (ie==i) then ; ie=list(ie) ; cycle ; end if
              if (ie==ivv) then ; ie=list(ie) ; cycle ; end if
-             !if (node(ie)%tipus==1.and.tipi==2) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15 THAT LINE IS DIFFERENT WITH THE _inter_other_side_epi VERSION OF THE SUBROUTINE
-             !if (node(ie)%tipus==2.and.tipi==1) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15 THAT LINE IS DIFFERENT WITH THE _inter_other_side_epi VERSION OF THE SUBROUTINE
+             if (node(ie)%tipus==1.and.tipi==2) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15 THAT LINE IS DIFFERENT WITH THE _inter_other_side_epi VERSION OF THE SUBROUTINE
+             if (node(ie)%tipus==2.and.tipi==1) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15 THAT LINE IS DIFFERENT WITH THE _inter_other_side_epi VERSION OF THE SUBROUTINE
              dist=sqrt((node(ie)%x-ix)**2+(node(ie)%y-iy)**2+(node(ie)%z-iz)**2)
              a=dai+node(ie)%add
              if(tipi>=3)then
@@ -1551,7 +1652,7 @@ end subroutine
 !*************************************************************************************************************************************************************************
 !*************************************************************************************************************************************************************************
 
-           !NEIGHBOR_BUILT_SIMPLENEIGH_node(i=    IS 22-12-20
+           !NEIGHBOR_BUILT_SIMPLENEIGH_node(i)    IS 22-12-20
 
 !*************************************************************************************************************************************************************************
 !*************************************************************************************************************************************************************************
@@ -2226,13 +2327,11 @@ integer::snneigh
       allocate(osdneigh(snneigh),osneigh(snneigh))
       osdneigh(1:snneigh)=sdneigh(1:snneigh)
       osneigh(1:snneigh)=sneigh(1:snneigh)
-
    !print*,"sneigh",sneigh(1:nneigh(i))
       if(ffu(2)==1)then
         !screening by Gabriel graph !>>Miquel6-3-14
         !a neighbor connection is deleted if the sphere which diameter is the vector connecting the two nodes contains any other node
         !ordering the neighors with increasing distance
-
         allocate(oosdneigh(snneigh),oosneigh(snneigh))
 
         !sorting algorithm by selection, it's ok
@@ -2281,7 +2380,6 @@ integer::snneigh
         snneigh=ii
         !snneigh=snneigh-ii
         !if(i==1) print*,nneigh(1),"neigh1",neigh(1,1:nneigh(1))
-
         trans_neigh(i,1:snneigh)=oosneigh(1:snneigh)
         trans_dneigh(i,1:snneigh)=oosdneigh(1:snneigh)
       else                                                 !>>> Is 23-4-15
@@ -2322,7 +2420,7 @@ integer::snneigh
       vm(i)=i
     end do !;print*,"pillat pre delau"
     !calling the triangulation subroutine
-    call dtriw3(npt, sizht, maxbf, maxfc, vcl, vm, nbf, nfc, nface, ntetra, bf, fc, ht, ierr)
+    !call dtriw3(npt, sizht, maxbf, maxfc, vcl, vm, nbf, nfc, nface, ntetra, bf, fc, ht, ierr)
     !if(ierr/=0)then; print*,"error in the triangulation, avort or something",ierr,getot ; endif !call exit(24); end if
     !translating the ouptut into a neighbor matrix
 
@@ -2394,7 +2492,7 @@ integer::snneigh
         !A neighbor connection is deleted if the sphere which diameter is the vector connecting the two nodes contains any other node
         !Ordering the neighors with increasing distance
 
-        if (ffu(9)==0) then   !!!! Is 4-3-2020 APARENTLY THAT WAS A BUT IN THE 2016 VERSION, BUT WE KEEP FOR COMPATIBILITY WITH THE EXAMPLES IN THE OLD VERSION
+        if (ffu(9)==0.or.ffu(9)>1) then !>>> Is 20-9-24   !!!! Is 4-3-2020 APARENTLY THAT WAS A BUT IN THE 2016 VERSION, BUT WE KEEP FOR COMPATIBILITY WITH THE EXAMPLES IN THE OLD VERSION
           ix=node(i)%x     ; iy=node(i)%y     ; iz=node(i)%z   
         end if
 
@@ -2462,7 +2560,7 @@ integer::snneigh
 
 
 
-if (ffu(9)==0) then
+if (ffu(9)==0.or.ffu(9)>1) then ! >>> Is 20-9-24
   if(allocated(trans_neigh)) deallocate(trans_neigh)
   if(allocated(trans_dneigh)) deallocate(trans_dneigh)
   if(allocated(sdneigh)) deallocate(sdneigh)
@@ -2479,6 +2577,552 @@ if (ffu(9)==0) then
 end if
 end subroutine neighbor_build_old
 
+
+
+!************************************************************************************************************************************************
+! FAST WITH GABRIEL >>> Is 1-4-25
+!************************************************************************************************************************************************
+!************************************************************************************************************************************************
+
+subroutine neighbor_fossilized_trial ! simply check all the neighbors of each box at once so we calculate roughly half the number
+integer i,j,k,ii,jj,kk,iii,jjj,kkk,ie,iee,kl,ni,tipi
+real*8  dist,a,ix,iy,iz,dai
+integer snneigh
+integer tengui(nd,nd)
+
+  omnn=50  
+  if (allocated(nneigh)) deallocate(nneigh)
+  allocate(nneigh(nda))
+
+  if (allocated(neigh)) deallocate(neigh)
+  allocate(neigh(nda,omnn))
+
+  call iniboxes
+
+  neigh=0  ! 4-3-2020
+  nneigh=0 ! 4-3-2020
+  dneigh=0
+  tengui=0
+
+
+!CAL ASSEGURAR QUE EL ALTRE SIGUI VEI TEU SEGUR, O NO, NO SE SI CAL
+do ii=-nboxes+1,nboxes-1    !!!!
+  do jj=-nboxes+1,nboxes-1  !!!!
+    do kk=-nboxes,nboxes-1
+      ie=boxes(ii,jj,kk)
+      if (ie==0) cycle
+      do while(ie.ne.0)
+        ix=node(ie)%x ; iy=node(ie)%y ; iz=node(ie)%z
+        dai=node(ie)%add
+!        tipi=node(ie)%tipus
+tipi=node(ie)%altre
+        do i=-1,1
+          do j=-1,1
+            do k=0,1
+              iee=boxes(ii+i,jj+j,kk+k)
+              do while(iee.ne.0)
+!                if (tipi==1.and.node(iee)%tipus==2.or.tipi==2.and.node(iee)%tipus==1) then ; iee=list(iee) ; cycle ; end if              
+                if (tipi==iee) then ; iee=list(iee) ; cycle ;end if
+                dist=(ix-node(iee)%x)**2+(iy-node(iee)%y)**2+(iz-node(iee)%z)**2  
+                if (dist<(dai+node(iee)%add)**2) then
+                  dist=sqrt(dist)
+                  if (tengui(ie,iee)==0) then
+                    tengui(ie,iee)=1
+                    ni=nneigh(ie)+1
+                    nneigh(ie)=ni
+                    neigh(ie,ni)=iee
+                    dneigh(ie,ni)=dist
+                  end if
+                  if (tengui(iee,ie)==0) then
+                    tengui(iee,ie)=1
+                    ni=nneigh(iee)+1
+                    nneigh(iee)=ni
+                    neigh(iee,ni)=ie
+                    dneigh(iee,ni)=dist
+                  end if
+                end if
+                iee=list(iee)
+              end do
+            end do
+          end do
+        end do
+        ie=list(ie)
+      end do
+    end do
+  end do
+end do
+
+end subroutine
+!************************************************************************************************************************************************
+
+
+subroutine neighbor_build_complete_gabriel
+integer:: ivv,ii1,ii2,ii3,nbo,iii1,iii2,iii3,ie,ierr,ij,ik,jk,iv,kl
+real*8:: ix,iy,iz,dist,udist,nbh
+
+integer::tipi  !>>Miquel31-12-14
+real*8::dai,maxlen    !>>Miquel31-12-14
+
+!!!triangulation variables
+integer:: npt !number of points
+integer:: sizht !size of hash table
+integer:: maxbf,maxfc,nbf,nfc,nface,ntetra   !size of arrays
+real*8,allocatable :: vcl(:,:) !point coordinates
+integer,allocatable :: vm(:),ht(:),bf(:,:),fc(:,:) !point indices (the algorithm reorders)
+real*8::jx,jy,jz,cx,cy,cz  !>>Miquel6-3-14
+integer::o                 !>>Miquel6-3-14
+integer,allocatable::osneigh(:),sneigh(:),trans_neigh(:,:)
+real*8,allocatable::osdneigh(:),sdneigh(:),trans_dneigh(:,:)
+integer,allocatable::oosneigh(:)
+real*8,allocatable::oosdneigh(:)
+integer::snneigh
+
+
+!  a=maxval(node(:nd)%eqs)
+!  if (rv<a) then ; rv=a;urv=1d0/rv ;end if !this is mostly to allow diffusion between the two faces of the epithelium
+  rdiffmax=2*maxval(node(:nd)%add)*dmax
+
+  !omnn=0
+  call iniboxes
+  mnn_dynam=mnn_dyn*(2*nint(rdiffmax*urv)+1)**3
+  allocate(trans_neigh(nd,mnn_dynam),trans_dneigh(nd,mnn_dynam))
+
+  if (ffu(8)==0)then !normal neighboring, extensive search of the boxes
+    omnn=0
+    neigh=0  ! 4-3-2020
+    nneigh=0 ! 4-3-2020
+    do i=1,nd
+      if (rdiffmax<2*node(i)%add)then
+        nbh=2*node(i)%add  !the neighbor search range for diffusion is the same as for node interactions
+      else
+        nbh=rdiffmax
+      end if
+      
+      ix=node(i)%x     ; iy=node(i)%y     ; iz=node(i)%z   
+      ii1=nint(iz*urv) ; ii2=nint(iy*urv) ; ii3=nint(ix*urv)
+      ivv=node(i)%altre
+
+      nbo=nint(nbh*urv) !;print*,"nbo",nbo,"rdiffmax",rdiffmax
+      mnn_dynam=mnn_dyn*(2*nbo+1)**3 !;print*,"mnn_dyn def",mnn_dynam !calculating the alleged maximal width of the neigh matrix
+
+      allocate(sdneigh(mnn_dynam),sneigh(mnn_dynam))
+      snneigh=0
+      sneigh=0 ; sdneigh=0d0
+
+      if(node(i)%tipus<3)then
+        snneigh=1
+        sneigh(1)=ivv
+        sdneigh(1)=sqrt((node(ivv)%x-ix)**2+(node(ivv)%y-iy)**2+(node(ivv)%z-iz)**2)
+      end if
+
+      !>>> Is 18-4-15
+      if (ffu(23)==1) then ! IS 22-12-20 WHETHER WE HAVE SIMPLIFIED NEIGHBORING !!>> HC 14-1-2021
+      
+        ! HERE WE DON'T
+        if (ffu(17)==0) then  !if 0 epithelial nodes from one side do not consider as neighbors nodes from the other side
+            tipi=node(i)%tipus
+            dai=node(i)%add
+            do i1=-nbo,nbo 
+              iii1=ii1+i1
+              do i2=-nbo,nbo
+                iii2=ii2+i2
+                do i3=-nbo,nbo
+                  iii3=ii3+i3
+                  ie=boxes(iii3,iii2,iii1)
+                  do while(ie.ne.0)
+                    if (ie==i) then ; ie=list(ie) ; cycle ; end if
+                    if (ie==ivv) then ; ie=list(ie) ; cycle ; end if
+                      if (node(ie)%tipus==1.and.tipi==2) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15
+                      if (node(ie)%tipus==2.and.tipi==1) then ; ie=list(ie) ; cycle ; end if !>>> Is 18-4-15
+                    dist=sqrt((node(ie)%x-ix)**2+(node(ie)%y-iy)**2+(node(ie)%z-iz)**2)
+                    !>>Miquel31-12-14
+                    a=dai+node(ie)%add
+                    if(tipi>=3)then
+                      if(node(ie)%tipus>=3)then !mesench/ECM vs mesench/ECM
+                       if(dist>a)then ; ie=list(ie) ; cycle ; end if
+                      else  !mesench/ECM vs epithelial
+                        b=arrel_de_dos*a
+                        if(dist>b)then ; ie=list(ie) ; cycle ; end if
+                      end if
+                    else !epithelial vs epithelial
+                      b=arrel_de_dos*a
+                      if(tipi==node(ie)%tipus)then !same face epithelials
+                        if(b<maxlen) b=maxlen
+                        if(dist>b)then ; ie=list(ie) ; cycle ; end if
+                      else
+                        if(dist>b)then ; ie=list(ie) ; cycle ; end if    
+                      end if
+                    end if
+                  
+                    !>>Miquel31-12-14
+                    snneigh=snneigh+1
+                    sneigh(snneigh)=ie
+                    sdneigh(snneigh)=dist
+                    ie=list(ie)
+                  end do
+                end do
+              end do
+            end do
+       
+          
+        else  ! epithelial nodes from one side do consider as neighbors nodes from the other side
+          tipi=node(i)%tipus
+          dai=node(i)%add
+          do i1=-nbo,nbo 
+            iii1=ii1+i1
+            do i2=-nbo,nbo
+              iii2=ii2+i2
+              do i3=-nbo,nbo
+                iii3=ii3+i3
+                ie=boxes(iii3,iii2,iii1)
+                do while(ie.ne.0)
+                  if (ie==i) then ; ie=list(ie) ; cycle ; end if
+                  if (ie==ivv) then ; ie=list(ie) ; cycle ; end if
+                  dist=sqrt((node(ie)%x-ix)**2+(node(ie)%y-iy)**2+(node(ie)%z-iz)**2)
+                  !>>Miquel31-12-14
+                  a=dai+node(ie)%add
+                  if(tipi>=3)then
+                    if(node(ie)%tipus>=3)then !mesench/ECM vs mesench/ECM
+                      if(dist>a)then ; ie=list(ie) ; cycle ; end if
+                    else  !mesench/ECM vs epithelial
+                      b=arrel_de_dos*a !sqrt(2*(a**2))
+                      if(dist>b)then ; ie=list(ie) ; cycle ; end if
+                    end if
+                  else !epithelial vs epithelial
+                    b=arrel_de_dos*a !sqrt(2*(a**2))
+                    if(tipi==node(ie)%tipus)then !same face epithelials
+                      if(b<maxlen) b=maxlen
+                      if(dist>b)then ; ie=list(ie) ; cycle ; end if
+                    else
+                      if(dist>b)then ; ie=list(ie) ; cycle ; end if    
+                    end if
+                  end if
+                  !>>Miquel31-12-14
+                  snneigh=snneigh+1
+                  sneigh(snneigh)=ie
+                  sdneigh(snneigh)=dist
+                  ie=list(ie)
+                end do
+              end do
+            end do
+          end do
+        end if
+        
+      else          ! 
+
+      ! IS 22-12-20 WITH SIMPLIFIED NEIGHBORING
+        if (ffu(17)==0) then  !if 0 epithelial nodes from one side do not consider as neighbors nodes from the other side
+            tipi=node(i)%tipus
+            dai=node(i)%add
+            do i1=-1,1 
+              iii1=ii1+i1
+              do i2=-1,1
+                iii2=ii2+i2
+                do i3=-1,1
+                  !iii3=ii3+i3
+                  ie=boxes(ii3+i3,iii2,iii1)
+                  do while(ie.ne.0)
+                    kl=abs(node(ie)%tipus-tipi)
+                    if (kl==1) then ; ie=list(ie) ; cycle ; end if
+                    dist=(node(ie)%x-ix)**2+(node(ie)%y-iy)**2+(node(ie)%z-iz)**2                    
+                    a=(dai+node(ie)%add)**2
+                    if(dist>a) then ; ie=list(ie) ; cycle ; end if                   
+                    if (ie==i) then ; ie=list(ie) ; cycle ; end if
+
+                    !>>Miquel31-12-14
+                    snneigh=snneigh+1
+                    sneigh(snneigh)=ie
+                    sdneigh(snneigh)=sqrt(dist)
+                    ie=list(ie)
+                  end do
+                end do
+              end do
+            end do
+          
+        else  ! epithelial nodes from one side do consider as neighbors nodes from the other side
+
+            tipi=node(i)%tipus
+            dai=node(i)%add
+            do i1=-1,1 
+              iii1=ii1+i1
+              do i2=-1,1
+                iii2=ii2+i2
+                do i3=-1,1
+                  !iii3=ii3+i3
+                  ie=boxes(ii3+i3,iii2,iii1)
+                  do while(ie.ne.0)
+                    dist=(node(ie)%x-ix)**2+(node(ie)%y-iy)**2+(node(ie)%z-iz)**2                    
+                    a=(dai+node(ie)%add)**2
+                    if(dist>a)then ; ie=list(ie) ; cycle ; end if                   
+                    if (ie==i) then ; ie=list(ie) ; cycle ; end if
+
+                    !>>Miquel31-12-14
+                    snneigh=snneigh+1
+                    sneigh(snneigh)=ie
+                    sdneigh(snneigh)=sqrt(dist)
+                    ie=list(ie)
+                  end do
+                end do
+              end do
+            end do
+        
+        end if
+
+      end if
+      allocate(osdneigh(snneigh),osneigh(snneigh))
+      osdneigh(1:snneigh)=sdneigh(1:snneigh)
+      osneigh(1:snneigh)=sneigh(1:snneigh)
+   !print*,"sneigh",sneigh(1:nneigh(i))
+      if(ffu(2)==1)then
+        !screening by Gabriel graph !>>Miquel6-3-14
+        !a neighbor connection is deleted if the sphere which diameter is the vector connecting the two nodes contains any other node
+        !ordering the neighors with increasing distance
+        allocate(oosdneigh(snneigh),oosneigh(snneigh))
+
+        !sorting algorithm by selection, it's ok
+        do j=1,snneigh-1  
+          b=osdneigh(j)
+          ii=0
+          do k=j+1,snneigh
+            c=osdneigh(k)
+             if(b>c)then
+              ii=k ; b=osdneigh(k)
+            end if
+          end do
+          if(ii/=0)then
+            !jj=osneigh(j)
+            kk=osneigh(ii) ; c=osdneigh(ii) !the swap
+            osneigh(ii)=osneigh(j) ; osdneigh(ii)=osdneigh(j)
+            osneigh(j)=kk ; osdneigh(j)=c
+          end if
+        end do
+
+        !the screening
+        !ii=0 !the number of eliminated connections
+        do j=snneigh,1,-1
+          jj=osneigh(j)
+          if(jj==ivv) cycle
+          a=osdneigh(j)*0.5*screen_radius !the radius of the sphere !>>Miquel28-7-14
+          jx=node(jj)%x ; jy=node(jj)%y ; jz=node(jj)%z
+          cx=(ix+jx)*0.5 ; cy=(iy+jy)*0.5 ; cz=(iz+jz)*0.5 !the midpoint
+          do k=j-1,1,-1
+            kk=osneigh(k)
+            d=sqrt((cx-node(kk)%x)**2+(cy-node(kk)%y)**2+(cz-node(kk)%z)**2)
+            if(d-a<epsilod)then !there is one node within the sphere, we must delete this connection
+              osneigh(j)=0
+              exit
+            end if
+          end do
+        end do
+        ii=0
+        do j=1,snneigh
+          jj=osneigh(j)
+          if(jj/=0)then
+            ii=ii+1
+            oosneigh(ii)=jj ; oosdneigh(ii)=osdneigh(j)
+          end if
+        end do
+        snneigh=ii
+        !snneigh=snneigh-ii
+        !if(i==1) print*,nneigh(1),"neigh1",neigh(1,1:nneigh(1))
+        trans_neigh(i,1:snneigh)=oosneigh(1:snneigh)
+        trans_dneigh(i,1:snneigh)=oosdneigh(1:snneigh)
+      else                                                 !>>> Is 23-4-15
+        trans_neigh(i,1:snneigh)=osneigh(1:snneigh)        !>>> Is 23-4-15
+        trans_dneigh(i,1:snneigh)=osdneigh(1:snneigh)      !>>> Is 23-4-15
+      end if                                            
+      
+      if(snneigh>omnn) omnn=snneigh
+      nneigh(i)=snneigh
+      deallocate(osdneigh,osneigh,sdneigh,sneigh)
+      if (ffu(2)==1) deallocate(oosneigh,oosdneigh)
+
+    end do
+    !omnn=maxval(nneigh,dim=1,mask=nneigh<=nd) ; print*,"omnn",omnn
+    if(allocated(neigh)) deallocate(neigh)
+    if(allocated(dneigh)) deallocate(dneigh)
+    allocate(neigh(nda,omnn),dneigh(nda,omnn))
+    neigh(1:nd,1:omnn)=trans_neigh(1:nd,1:omnn)
+    dneigh(1:nd,1:omnn)=trans_dneigh(1:nd,1:omnn)
+   
+  else   !*****3D triangulation neighooring***************************************************************
+    
+    npt=nd
+!    sizht=3/2*npt
+    sizht=3*npt
+    maxfc=npt**2
+    maxbf=npt**2
+    allocate(vcl(3,npt),vm(npt))
+    allocate(bf(1:3,maxbf),fc(1:7,maxfc))
+    allocate(ht(0:sizht-1))
+    
+    
+    !call extrem !not necessary, but sets some variables that later may be used in pinta and creix !>>Miquel21-3-14
+    
+    
+    do i=1,npt  !building the input arrays for the triangualtion function
+      vcl(1,i)=node(i)%x ; vcl(2,i)=node(i)%y ; vcl(3,i)=node(i)%z
+      vm(i)=i
+    end do !;print*,"pillat pre delau"
+    !calling the triangulation subroutine
+    !call dtriw3(npt, sizht, maxbf, maxfc, vcl, vm, nbf, nfc, nface, ntetra, bf, fc, ht, ierr)
+    !if(ierr/=0)then; print*,"error in the triangulation, avort or something",ierr,getot ; endif !call exit(24); end if
+    !translating the ouptut into a neighbor matrix
+
+    do i=1,nd !initialize neighbor matrix
+!      neigh(i,1:nneigh(i))=0
+      neigh(i,1:)=0  !IS 29-4-14
+      nneigh(i)=0
+    end do
+    do j=1,nfc               ! it passes through all triangles 
+      if((fc(1,j)>0).and.(fc(2,j)>0).and.(fc(3,j)>0))then ! it is a "valid" triangle
+        ii=fc(1,j) ; jj=fc(2,j) ; kk=fc(3,j)
+        iii=vm(ii);jjj=vm(jj);kkk=vm(kk) !; print*,"iii jjj kkk",iii,jjj,kkk
+        tiii=node(iii)%tipus ; tjjj=node(jjj)%tipus ; tkkk=node(kkk)%tipus
+
+        ivv=nneigh(iii)
+        ij=0 ; ik=0 ; jk=0
+        !connection iii-jjj*****
+        if(ivv==0)then
+          d=sqrt((vcl(1,iii)-vcl(1,jjj))**2+(vcl(2,iii)-vcl(2,jjj))**2+(vcl(3,iii)-vcl(3,jjj))**2)
+          ivv=1
+          trans_neigh(iii,ivv)=jjj ; trans_dneigh(iii,ivv)=d
+        else
+          do i=1,nneigh(iii)
+            if(trans_neigh(iii,i)==jjj)then; ij=1;exit;end if
+          end do
+          if(ij==0)then
+            d=sqrt((vcl(1,iii)-vcl(1,jjj))**2+(vcl(2,iii)-vcl(2,jjj))**2+(vcl(3,iii)-vcl(3,jjj))**2)
+            ivv=ivv+1
+            trans_neigh(iii,ivv)=jjj ; trans_dneigh(iii,ivv)=d
+          end if
+        end if
+        if(ij==0)then
+          !connection jjj-iii*******
+          if(nneigh(jjj)==0)then ; nneigh(jjj)=1 ; trans_neigh(jjj,1)=iii ; trans_dneigh(jjj,1)=d
+          else; iv=nneigh(jjj)+1 ; trans_neigh(jjj,iv)=iii ; trans_dneigh(jjj,iv)=d ; nneigh(jjj)=iv ; end if
+        end if
+        !connection iii-kkk*****
+        do i=1,nneigh(iii)
+          if(trans_neigh(iii,i)==kkk)then; ik=1;exit;end if
+        end do
+        if(ik==0)then
+          d=sqrt((vcl(1,iii)-vcl(1,kkk))**2+(vcl(2,iii)-vcl(2,kkk))**2+(vcl(3,iii)-vcl(3,kkk))**2)
+          ivv=ivv+1
+          trans_neigh(iii,ivv)=kkk ; trans_dneigh(iii,ivv)=d
+          !connection kkk-iii*******
+          if(nneigh(kkk)==0)then ; nneigh(kkk)=1 ; trans_neigh(kkk,1)=iii ; trans_dneigh(kkk,1)=d
+          else; iv=nneigh(kkk)+1 ; trans_neigh(kkk,iv)=iii ; trans_dneigh(kkk,iv)=d ; nneigh(kkk)=iv ; end if
+        end if
+        nneigh(iii)=ivv
+        !connection jjj-kkk*****
+        do i=1,nneigh(jjj)
+          if(trans_neigh(jjj,i)==kkk)then; jk=1;exit;end if
+        end do
+        if(jk==0)then
+          d=sqrt((vcl(1,jjj)-vcl(1,kkk))**2+(vcl(2,jjj)-vcl(2,kkk))**2+(vcl(3,jjj)-vcl(3,kkk))**2)
+          iv=nneigh(jjj)+1
+          trans_neigh(jjj,iv)=kkk ; trans_dneigh(jjj,iv)=d ;nneigh(jjj)=iv
+          !connection kkk-jjj*******
+          iv=nneigh(kkk)+1 ; trans_neigh(kkk,iv)=jjj ; trans_dneigh(kkk,iv)=d ; nneigh(kkk)=iv
+        end if
+      end if
+    end do
+
+
+    if(ffu(2)==1)then
+    
+      do i=1,nd
+        !Screening by Gabriel graph !>>Miquel6-3-14
+        !A neighbor connection is deleted if the sphere which diameter is the vector connecting the two nodes contains any other node
+        !Ordering the neighors with increasing distance
+
+        if (ffu(9)==0.or.ffu(9)>1) then !>>> Is 20-9-24   !!!! Is 4-3-2020 APARENTLY THAT WAS A BUT IN THE 2016 VERSION, BUT WE KEEP FOR COMPATIBILITY WITH THE EXAMPLES IN THE OLD VERSION
+          ix=node(i)%x     ; iy=node(i)%y     ; iz=node(i)%z   
+        end if
+
+        !sorting algorithm by selection, it's ok
+        do j=1,nneigh(i)-1  
+          b=trans_dneigh(i,j)
+          ii=0
+          do k=j+1,nneigh(i)
+            c=trans_dneigh(i,k)
+             if(b>c)then
+              ii=k ; b=trans_dneigh(i,k)
+            end if
+          end do
+          if(ii/=0)then
+            !jj=osneigh(j)
+            kk=trans_neigh(i,ii) ; c=trans_dneigh(i,ii) !the swap
+            trans_neigh(i,ii)=trans_neigh(i,j) ; trans_dneigh(i,ii)=trans_dneigh(i,j)
+            trans_neigh(i,j)=kk ; trans_dneigh(i,j)=c
+          end if
+        end do
+        
+        !the screening
+        ii=0 !the number of eliminated connections
+        do j=nneigh(i),1,-1
+          jj=trans_neigh(i,j)
+          if(jj==ivv) cycle
+          a=trans_dneigh(i,j)*0.5*screen_radius !the radius of the sphere
+          jx=node(jj)%x ; jy=node(jj)%y ; jz=node(jj)%z
+          cx=(ix+jx)*0.5 ; cy=(iy+jy)*0.5 ; cz=(iz+jz)*0.5 !the midpoint
+          do k=j-1,1,-1
+            kk=trans_neigh(i,k)
+            d=sqrt((cx-node(kk)%x)**2+(cy-node(kk)%y)**2+(cz-node(kk)%z)**2)
+            if(d<a)then !there is one node within the sphere, we must delete this connection
+              do l=j,nneigh(i)-ii-1
+                trans_neigh(i,l)=trans_neigh(i,l+1)
+                trans_dneigh(i,l)=trans_dneigh(i,l+1)
+              end do
+              trans_neigh(i,nneigh(i)-ii)=0
+              trans_dneigh(i,nneigh(i)-ii)=0
+              ii=ii+1
+              exit
+            end if
+          end do
+        end do
+        nneigh(i)=nneigh(i)-ii
+      end do
+    !else                                                 !>>> Is 23-4-15
+    !  trans_neigh(i,1:snneigh)=osneigh(1:snneigh)        !>>> Is 23-4-15
+    !  trans_dneigh(i,1:snneigh)=osdneigh(1:snneigh)      !>>> Is 23-4-15      
+    end if
+    
+    omnn=0
+    do i=1,nd
+      if(nneigh(i)>omnn) omnn=nneigh(i)
+    end do
+    !print*,"omnn",omnn
+    if(allocated(neigh)) deallocate(neigh)
+    if(allocated(dneigh)) deallocate(dneigh)
+    allocate(neigh(nda,omnn),dneigh(nda,omnn))
+    neigh(1:nd,1:omnn)=trans_neigh(1:nd,1:omnn)
+    dneigh(1:nd,1:omnn)=trans_dneigh(1:nd,1:omnn)
+  end if
+!!do i=1,nd
+!end do  
+
+
+
+if (ffu(9)==0.or.ffu(9)>1) then ! >>> Is 20-9-24
+  if(allocated(trans_neigh)) deallocate(trans_neigh)
+  if(allocated(trans_dneigh)) deallocate(trans_dneigh)
+  if(allocated(sdneigh)) deallocate(sdneigh)
+  if(allocated(osdneigh)) deallocate(osdneigh)
+  if(allocated(osneigh)) deallocate(osneigh)
+  if(allocated(sneigh)) deallocate(sneigh)
+  if(allocated(oosdneigh)) deallocate(oosdneigh)
+  if(allocated(oosneigh)) deallocate(oosneigh)
+  if(allocated(vcl)) deallocate(vcl)
+  if(allocated(vm)) deallocate(vm)
+  if(allocated(bf)) deallocate(bf)
+  if(allocated(fc)) deallocate(fc)
+  if(allocated(ht)) deallocate(ht)
+end if
+end subroutine neighbor_build_complete_gabriel
+
+
 !************************************************************************************************************************************************************************!
 !************************************************************************************************************************************************************************!
 !************************************************************************************************************************************************************************!
@@ -2489,12 +3133,13 @@ end subroutine neighbor_build_old
 
 subroutine fill_co_griders                                                    !!>> HC 10-6-2021 This subroutine fills the co_griders matrix with the neigh matrix
 implicit none                                                                 !!>> HC 10-6-2021 
-integer :: ich, jch, nmaxneigh, tipch, neich, ntipch, ord                     !!>> HC 10-6-2021
+integer :: ich, jch, nmaxneigh, tipch, neich, ntipch, ord,k                   !!>> HC 10-6-2021
 real*8 :: deich,ichx,ichy,ichz, jchx, jchz, jchy                              !!>> HC 10-6-2021
 ndch=nd                                                                       !!>> HC 15-6-2021 This is a public variable storing the number of nodes registered in the cogrid_matrix
 
+k=maxval(nneigh(1:nd))*1.5
 if (allocated(oneigh)) deallocate(oneigh)                                     !!>> HC 29-6-2021
-allocate(oneigh(1:nd,1:maxval(nneigh(1:nd))))                                 !!>> HC 29-6-2021
+allocate(oneigh(nd,k))                                 !!>> HC 29-6-2021
 if (allocated(onneigh)) deallocate(onneigh)                                   !!>> HC 29-6-2021
 allocate(onneigh(1:nd))                                                       !!>> HC 29-6-2021
 oneigh=0; onneigh=0                                                           !!>> HC 29-6-2021
@@ -2504,7 +3149,7 @@ do ich=1,nd                                                                   !!
    do jch=1,nneigh(ich)                                                       !!>> HC 10-6-2021 go over their neigh matrix
       neich=neigh(ich,jch)                                                    !!>> HC 10-6-2021
       if(neich<ich)cycle                                                      !!>> HC 30-6-2021
-      if (node(neich)%tipus.ge.3)cycle                                        !!>> HC 10-6-2021 find epithelial neighs
+      if (node(neich)%tipus.ge.3) cycle 
       onneigh(ich)=onneigh(ich)+1                                             !!>> HC 29-6-2021
       oneigh(ich,onneigh(ich))=neich                                          !!>> HC 29-6-2021
       onneigh(neich)=onneigh(neich)+1                                         !!>> HC 30-6-2021

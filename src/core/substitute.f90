@@ -53,6 +53,7 @@ program substitute
         read(1,*) npop                                     !!>> HC 21-11-2020 number of individuals
   close(1)                                                 !!>> HC 21-11-2020
  
+    
   open(1,file=trim(counter))                               !!>> HC 21-11-2020
       read(1,*) nsubs                                      !!>> HC 21-11-2020 number of substitutions we have already done
   close(1)                                                 !!>> HC 21-11-2020
@@ -167,13 +168,9 @@ program substitute
             write(386,*) nseed                          !!>> HC 21-11-2020
             write(386,*) newidum                        !!>> HC 21-11-2020
         close(386)                                      !!>> HC 21-11-2020
-     
-     
-     
-     
-     
                             
-        call random_number(a)                                   !!>> HC 21-11-2020 CHOOSE THE NEW INDIVIDUAL TO MUTATE AND RUN 
+        call random_number(a)                                   !!>> HC 21-11-2020 CHOOSE THE NEW INDIVIDUAL TO MUTATE AND RUN !!>>AL modificar para que la prob. 
+        !! de mutar sea proporcional al fitness
         thechosen=ceiling(a*npop)                               !!>> HC 21-11-2020 
         if(thechosen==0) thechosen=1                            !!>> HC 21-11-2020 
         write(id,'(I5.5)') thechosen                            !!>> HC 21-11-2020 

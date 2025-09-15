@@ -1,6 +1,5 @@
 !!>> HC 2-9-2020 This programme was written by Hugo Cano. it:
 ! Reads and embryo and makes the mutations 
-
 program mutar
 
   use io
@@ -10,40 +9,33 @@ program mutar
   use neighboring
   use inicial
 
-
-
   implicit none
   character*140 embryo, evaparams, whomut, embryoi
-  character*400 moving, rangfile !!>> HC 6-10-2021
+  character*400 moving, rangfile                         !!>> HC 6-10-2021
   character*80 cu
   character*80 ind
   integer :: remutate, inviable, limit1, individual
   integer :: ich,mind, wrsize
+  integer :: runornot                                    !!>> AL 10-4-24: if = 1 the mutation affects functional subnetwork so development of individual is runned. 
+                                                         !!>> AL 10-4-24: if = 0 no development is needed, this individual inherits parent fitness
   integer, allocatable, dimension(:) :: wridum, svidum
   integer, allocatable, dimension(:) :: whomutates, effu !!>>HC 20-11-2020 Here we store what individuals are going to mutate
-  integer :: mutacode, mutageni, mutagenj  !!>> HC 16-9-2021 This stores the kind of mutation that we had 
-  real*8 :: newvalue, prevalue, rval !!>> HC 29-11-2021 Output information of mutations
+  integer :: mutacode, mutageni, mutagenj                !!>> HC 16-9-2021 This stores the kind of mutation that we had 
+  real*8 :: newvalue, prevalue, rval                     !!>> HC 29-11-2021 Output information of mutations
   call getarg(1,embryo)
   call getarg(2,evaparams)
   call getarg(3,rangfile)   !!>> HC 6-10-2021 file with the ranges of parameters
  
-  
-  
-  
   aut=2
   carg=embryo                              !!>> HC 2-9-2020 We read the embryo 
   call random_seed(size = nseed)                          !!>> HC 2-9-2020
   call getarg(2,cu)                                       !!>> HC 2-9-2020
-  !if (len_trim(cu)==1) then                               !!>> HC 2-9-2020
-  !  read (cu,*) aut                                       !!>> HC 2-9-2020
-  !else                                                    !!>> HC 2-9-2020 Possible differences in
+
   if(allocated(idum))deallocate(idum)                   !!>> HC 2-9-2020 random seed length
   allocate(idum(nseed))                                 !!>> HC 2-9-2020
   if(allocated(idumoriginal))deallocate(idumoriginal)   !!>> HC 2-9-2020
   allocate(idumoriginal(nseed))                         !!>> HC 2-9-2020
-  !end if                                                  !!>> HC 2-9-2020
   call read_elli_evaparam(evaparams, effu)                      !!>> HC 2-9-2020 Read parameterfile
-
   call iniread
   call readsnap(embryo)
      
@@ -88,42 +80,9 @@ program mutar
      call suremuta_no_kadh(limit1,inviable,mind,mutacode,mutageni,mutagenj,prevalue,newvalue,rangfile) !!>> HC 6-10-2021 This makes a sure mutation of type=mind
      remutate=remutate+1                          !!>> HC 8-9-2020
   end do                                         !!>> HC 8-9-2020
-
-  ! write initial conditions                     !!>> HC 8-9-2020
-  !call put_param_to_matrix(param)                !!>> HC 8-9-2020
   call iniio
-  !idum=svidum
-  !call random_seed(put=idum)
   call writesnap                                 !!>> HC 8-9-2020
-
-
-  !embryoi=embryo
-  !embryo=trim(embryo)//"0.dat"                   !!>> HC 8-9-2020
-  
-  !itvi=1                                         !!>> HC 17-11-2020
-  !itviactual=1                                   !!>> HC 17-11-2020
-  !call iniread                                   !!>> HC 17-11-2020
-  !call readsnap(embryoi)                          !!>> HC 17-11-2020
-  !if(nd>1) call neighbor_build                   !!>> HC 17-11-2020
-  !if (errorlec==1.and.eva==0) stop               !!>> HC 17-11-2020 !>>> Is 22-1-14
-  
-  !Other initialisation
-  !call iniio              ! this is just to allocate and inicializate the matrices for the variable names and stuff !!>> HC 17-11-2020 This was in a subroutine that disappeared
-  
-!call inialea3d(nparti)  ! this is to inicialize the partition of random numbers in a sphere                       !!>> HC 17-11-2020 called mut_initial 
-  !call llaleat            ! this is to read a bunch of random numbers                                              !!>> HC 17-11-2020
-  !if(ffu(8)==0)then                                                                                                !!>> HC 17-11-2020
-!  call iniboxes           ! this to inicialize the boxes                                                          !!>> HC 17-11-2020
-  !end if                                                                                                            !!>> HC 17-11-2020
-  !if(nd>1) call neighbor_build                                                                                      !!>> HC 17-11-2020
-  !call put_param_to_matrix(param)                                                                                   !!>> HC 17-11-2020
-  !paramo=param                                                                                                      !!>> HC 17-11-20204
-  !idum=svidum
-  !call random_seed(put=idum)
-  !call writesnapini    !here we write the output file with the initial conditions           !>>>>Miquel18-11-13     !!>> HC 17-11-2020
-     
- 
-  ! The mutation led to an inviable individual            !!>> HC 8-9-2020 
+ ! The mutation led to an inviable individual            !!>> HC 8-9-2020 
   if (inviable==1) then                          !!>> HC 8-9-2020
      print*, "INVIABLE INDIVIDUAL: ABORTION"
      open(666, file="inviable.e")
@@ -138,11 +97,7 @@ program mutar
      close(777)                                        !!>>HC 16-9-2021
   endif
      
-
   moving="mv individual.dat0.dat "//trim(embryo)!//" "//trim(embryoi)   !!>>HC 20-11-2020 This substitutes the original by the mutated individual####
   call system(moving)                              !!>>HC 20-11-2020
-
-
-
 
 end program mutar

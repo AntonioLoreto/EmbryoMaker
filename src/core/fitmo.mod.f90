@@ -14,10 +14,6 @@
 
 !    You should have received a copy of the GNU General Public License
 !    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
-
-
 module fitmo
   use general
   use neighboring
@@ -3324,23 +3320,5 @@ call cpu_time(stop_time0)
 print*,stop_time0-start_time0,"***time in fitness***"
 !stop !****ojo*******
 end subroutine functional_complexity2
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 end module

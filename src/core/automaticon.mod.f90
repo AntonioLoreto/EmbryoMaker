@@ -29,7 +29,8 @@ contains
 
 subroutine auto
 integer irf
-integer iit_step,inu_it
+!integer iit_step,inu_it
+real*8 iit_step,inu_it    !!AL 20-5-25>> if we use real time this variables should be floats
 character*10 cf
 character*400 cx
 integer*4 pid

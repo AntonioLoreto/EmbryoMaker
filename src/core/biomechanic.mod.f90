@@ -451,8 +451,8 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
 300   nuve=nuve+1
 
       if (nuve>mnn) then; 
-        print *,"PANIC!!! PANIC!!!PANIC!!!; this is going to crash because there is too many " ; 
-        print *,"neighbors per a node to interact, and vuvx matrix and those are too small"
+        !print *,"PANIC!!! PANIC!!!PANIC!!!; this is going to crash because there is too many " ; 
+       ! print *,"neighbors per a node to interact, and vuvx matrix and those are too small"
         if (ffu(21)==1)then                                       !!>> HC 17-11-2020 We filter individuals that have too many neighbors
            if (ffufi(2,1)==1.and.ffufi(2,3)>0)then                !!>> HC 20-2-2021
               if (mod(getot,ffufi(2,3)).eq.0)then                 !!>> HC 20-2-2021   
@@ -492,7 +492,7 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
           end if                                 !>> HC 12-6-2020
         end if !;print*,"f",f,"fd",fd        !vforce(nuve,nod)=f     !>>>>>Miquel 7-8-13
        
-        if (ffu(20)==0)then          !!>> HC 15-6-2020 If there is a limit to adhesion, we have to add
+        if (ffu(20)==0)then !>>> Is 16-9-24 !!>> HC 15-6-2020  we have to add
            if (f>0.0d0)then                     !!>> HC 15-6-2020 adhesion and repulsion 
               arcilxch(nod)=arcilxch(nod)+f*uvx !!>> HC 15-6-2020 separately to test later 
               arcilych(nod)=arcilych(nod)+f*uvy !!>> HC 15-6-2020 whether adhesion has or not exeded the 
@@ -513,7 +513,7 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
            rcilx(ic)=rcilx(ic)-f*uvx ; rcily(ic)=rcily(ic)-f*uvy ; rcilz(ic)=rcilz(ic)-f*uvz  !>>>Miquel 4-4-14
         endif                                  !!>> HC 15-6-2020
                    
-        if (ffu(9)==1) then  ! 4-3-2020
+        if (ffu(9)==1) then  ! >>> Is 20-9-24 THAT IS the main difference between ffu(9)=0 and ffu(9)=2
           fmeanl(nod)=fmeanl(nod)+(fd-deqe) ; fmeanl(ic)=fmeanl(ic)+(fd-deqe) ! >>> Is 21-6-14 
         else
           fmeanl(nod)=fmeanl(nod)+f ; fmeanl(ic)=fmeanl(ic)+f ! >>> ! 4-3-2020 aixo es una mica mes correcte       
@@ -558,15 +558,12 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
 	arcilych(nod)=arcilych(nod)*b !!>> HC 15-6-2020
 	arcilzch(nod)=arcilzch(nod)*b !!>> HC 15-6-2020
       endif 
-      rcilx(nod)=arcilxch(nod)+rrcilxch(nod) !!>> HC 15-6-2020 We have to add the adhesion and repulsion
+      rcilx(nod)=arcilxch(nod)+rrcilxch(nod) !!>> HC 15-6-2020 We have to add the adhesion and repulsi
       rcily(nod)=arcilych(nod)+rrcilych(nod) !!>> HC 15-6-2020 components 
       rcilz(nod)=arcilzch(nod)+rrcilzch(nod) !!>> HC 15-6-2020
     endif
 
-
     if(epinveins(nod)>0)then                  !>>>Miquel24-3-14
-      !fmeanl(nod)=0
-    !else
       fmeanl(nod)=fmeanl(nod)/epinveins(nod)
     end if
 
@@ -578,6 +575,18 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
       end if
     end if
 
+    if (epinveins(nod)>0) then  ! >>> Is 7-6-14
+      a=epinveins(nod) ! >>> Is 7-6-14
+      a=1.0d0/a        ! >>> Is 7-6-14
+      rvx=rsprx+rcilx(nod)+(rtorx(nod)+rstorx(nod))*a  ! >>> Is 16-9-14
+      rvy=rspry+rcily(nod)+(rtory(nod)+rstory(nod))*a  ! >>> Is 16-9-14
+      rvz=rsprz+rcilz(nod)+(rtorz(nod)+rstorz(nod))*a  ! >>> Is 16-9-14
+    else
+      rvx=rsprx+rcilx(nod)  ! >>> Is 7-6-14 !summing the force components into a net force vector
+      rvy=rspry+rcily(nod)  ! >>> Is 7-6-14
+      rvz=rsprz+rcilz(nod)  ! >>> Is 7-6-14
+    end if
+
     if (aut==0) then ! if aut==0 there is not display   
       vsprx(nod)=rsprx ; vspry(nod)=rspry ; vsprz(nod)=rsprz                     !putting the force components into storage vectors for display
       vcilx(nod)=rcilx(nod)    ; vcily(nod)=rcily(nod)    ; vcilz(nod)=rcilz(nod)         !this part should be turned down
@@ -585,17 +594,6 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
       vstorx(nod)=rstorx(nod)  ; vstory(nod)=rstory(nod)  ; vstorz(nod)=rstorz(nod)!
     end if
 
-    if (epinveins(nod)>0) then  ! >>> Is 7-6-14
-      a=epinveins(nod) ! >>> Is 7-6-14
-      a=1.0d0/a        ! >>> Is 7-6-14
-      rvx=rsprx+rcilx(nod)+(rtorx(nod)+rstorx(nod))*a  ! >>> Is 7-6-14 !summing the force components into a net force vector
-      rvy=rspry+rcily(nod)+(rtory(nod)+rstory(nod))*a  ! >>> Is 7-6-14
-      rvz=rsprz+rcilz(nod)+(rtorz(nod)+rstorz(nod))*a  ! >>> Is 7-6-14
-    else
-      rvx=rsprx+rcilx(nod)  ! >>> Is 7-6-14 !summing the force components into a net force vector
-      rvy=rspry+rcily(nod)  ! >>> Is 7-6-14
-      rvz=rsprz+rcilz(nod)  ! >>> Is 7-6-14
-    end if
     !Physical boundaries force  !>>>>>Miquel9-1-14
     if(node(nod)%fix==1)then
       uvx=node(nod)%orix-ix
@@ -932,8 +930,8 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
 300   nuve=nuve+1
 
       if (nuve>mnn) then; 
-        print *,"PANIC!!! PANIC!!!PANIC!!!; this is going to crash because there is too many " ; 
-        print *,"neighbors per a node to interact, and vuvx matrix and those are too small"
+        !print *,"PANIC!!! PANIC!!!PANIC!!!; this is going to crash because there is too many " ; 
+        !print *,"neighbors per a node to interact, and vuvx matrix and those are too small"
         if (ffu(21)==1)then                                       !!>> HC 17-11-2020 We filter individuals that have too many neighbors
            if (ffufi(2,1)==1.and.ffufi(2,3)>0)then                !!>> HC 20-2-2021
               if (mod(getot,ffufi(2,3)).eq.0)then                 !!>> HC 20-2-2021   
@@ -973,7 +971,7 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
           end if                                 !>> HC 12-6-2020
         end if !;print*,"f",f,"fd",fd        !vforce(nuve,nod)=f     !>>>>>Miquel 7-8-13
        
-        if (ffu(20)==0)then          !!>> HC 15-6-2020 If there is a limit to adhesion, we have to add
+        if (ffu(20)==0)then !>>> Is 16-9-24 !!>> HC 15-6-2020  we have to add
            if (f>0.0d0)then                     !!>> HC 15-6-2020 adhesion and repulsion 
               arcilxch(nod)=arcilxch(nod)+f*uvx !!>> HC 15-6-2020 separately to test later 
               arcilych(nod)=arcilych(nod)+f*uvy !!>> HC 15-6-2020 whether adhesion has or not exeded the 
@@ -991,10 +989,11 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
            endif                                !!>> HC 15-6-2020
         else                                    !!>> HC 15-6-2020 If there is no limin, we do it conventionally
            rcilx(nod)=rcilx(nod)+f*uvx ; rcily(nod)=rcily(nod)+f*uvy ; rcilz(nod)=rcilz(nod)+f*uvz  !>>>Miquel 7-8-13
-           rcilx(ic)=rcilx(ic)-f*uvx ; rcily(ic)=rcily(ic)-f*uvy ; rcilz(ic)=rcilz(ic)-f*uvz  !>>>Miquel 4-4-14
+           rcilx(ic)=rcilx(ic)-f*uvx   ; rcily(ic)=rcily(ic)-f*uvy   ; rcilz(ic)=rcilz(ic)-f*uvz  !>>>Miquel 4-4-14
         endif                                  !!>> HC 15-6-2020
-                   
-        if (ffu(9)==1) then  ! 4-3-2020
+
+
+        if (ffu(9)==1) then  ! >>> Is 20-9-24 MAIN DIFFERENCE BETWEEN FFU(9)=0 AND FFU(9)=2
           fmeanl(nod)=fmeanl(nod)+(fd-deqe) ; fmeanl(ic)=fmeanl(ic)+(fd-deqe) ! >>> Is 21-6-14 
         else
           fmeanl(nod)=fmeanl(nod)+f ; fmeanl(ic)=fmeanl(ic)+f ! >>> ! 4-3-2020 aixo es una mica mes correcte       
@@ -1031,9 +1030,10 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
     end do
     
     if (ffu(20)==0) then !>>HC 14-05-2020 This creates a limit to the adhesion force suffered by the node
-      ftch=0
+      !ftch=0
       ftch=sqrt(arcilxch(nod)**2+arcilych(nod)**2+arcilzch(nod)**2) !!>> HC 15-6-2020 modul adhesion
       b=maxad/ftch
+!      print *,nod,maxad,ftch,"max adhesio"
       if (ftch>maxad) then !>>HC 14-05-2020 When the adhesion vector is larger than the limit(maxad)
 	arcilxch(nod)=arcilxch(nod)*b !!>> HC 15-6-2020 !>>HC 14-05-2020 We rescale the vector 
 	arcilych(nod)=arcilych(nod)*b !!>> HC 15-6-2020
@@ -1044,10 +1044,7 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
       rcilz(nod)=arcilzch(nod)+rrcilzch(nod) !!>> HC 15-6-2020
     endif
 
-
     if(epinveins(nod)>0)then                  !>>>Miquel24-3-14
-      !fmeanl(nod)=0
-    !else
       fmeanl(nod)=fmeanl(nod)/epinveins(nod)
     end if
 
@@ -1059,23 +1056,23 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
       end if
     end if
 
+    if (epinveins(nod)>0) then  ! >>> Is 7-6-14
+      a=epinveins(nod) ! >>> Is 7-6-14
+      a=1.0d0/a        ! >>> Is 7-6-14
+      rvx=rsprx+rcilx(nod)+(rtorx(nod)+rstorx(nod))*a  ! >>> Is 16-9-14
+      rvy=rspry+rcily(nod)+(rtory(nod)+rstory(nod))*a  ! >>> Is 16-9-14
+      rvz=rsprz+rcilz(nod)+(rtorz(nod)+rstorz(nod))*a  ! >>> Is 16-9-14
+    else
+      rvx=rsprx+rcilx(nod)  ! >>> Is 7-6-14 !summing the force components into a net force vector
+      rvy=rspry+rcily(nod)  ! >>> Is 7-6-14
+      rvz=rsprz+rcilz(nod)  ! >>> Is 7-6-14
+    end if
+
     if (aut==0) then ! if aut==0 there is not display   
       vsprx(nod)=rsprx ; vspry(nod)=rspry ; vsprz(nod)=rsprz                     !putting the force components into storage vectors for display
       vcilx(nod)=rcilx(nod)    ; vcily(nod)=rcily(nod)    ; vcilz(nod)=rcilz(nod)         !this part should be turned down
       vtorx(nod)=rtorx(nod)    ; vtory(nod)=rtory(nod)    ; vtorz(nod)=rtorz(nod)         !when there is no display
       vstorx(nod)=rstorx(nod)  ; vstory(nod)=rstory(nod)  ; vstorz(nod)=rstorz(nod)!
-    end if
-
-    if (epinveins(nod)>0) then  ! >>> Is 7-6-14
-      a=epinveins(nod) ! >>> Is 7-6-14
-      a=1.0d0/a        ! >>> Is 7-6-14
-      rvx=rsprx+rcilx(nod)+(rtorx(nod)+rstorx(nod))*a  ! >>> Is 7-6-14 !summing the force components into a net force vector
-      rvy=rspry+rcily(nod)+(rtory(nod)+rstory(nod))*a  ! >>> Is 7-6-14
-      rvz=rsprz+rcilz(nod)+(rtorz(nod)+rstorz(nod))*a  ! >>> Is 7-6-14
-    else
-      rvx=rsprx+rcilx(nod)  ! >>> Is 7-6-14 !summing the force components into a net force vector
-      rvy=rspry+rcily(nod)  ! >>> Is 7-6-14
-      rvz=rsprz+rcilz(nod)  ! >>> Is 7-6-14
     end if
 
     !Physical boundaries force  !>>>>>Miquel9-1-14
@@ -1093,6 +1090,9 @@ character*300 ::cxhc          ! For filtering too many neighbors !!>>HC 17-11-20
     dex(nod)=sqrt(rvx**2+rvy**2+rvz**2)  !module of the force vector !!>> HC 14-7-2021
     px(nod)=rvx ; py(nod)=rvy ; pz(nod)=rvz
   end do
+!    print *,"max adhesion x component",maxloc(arcilxch(:nd)),maxval(arcilxch(:nd))
+!    print *,"max adhesion y component",maxloc(arcilych(:nd)),maxval(arcilych(:nd))    
+!    print *,"max adhesion z component",maxloc(arcilzch(:nd)),maxval(arcilzch(:nd))
   
 return !X! THIS IS THE END         !!>> HC 17-11-2020
 

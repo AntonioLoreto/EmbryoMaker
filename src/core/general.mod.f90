@@ -47,7 +47,9 @@ implicit none
 ! METAPARAMETERS
 character*8, public, parameter ::version="14-7-21"   !CHECK MANUALLY date of this version of the code  previous explicit version="18-4-15" !>>> Is 18-4-15  
 integer,public                 ::aut                 !1 if non-graphical-automatic run, 0 otherwise
-integer,public, parameter      ::nparam=35           !numero de parametres
+! >>> Is 22-9-24integer,public, parameter      ::nparam=42           !numero de parametres ! Is 22-9-24
+
+integer,public                 ::nparam ! >>> Is 22-9-24
 integer,public, parameter      ::nparam_per_node=35  !CHECK MANUALLY number of parameters per node 
                                                      !(variables in type nod) IF YOU CHANGE THAT CHANGE ALSO io.mod
 integer,public, parameter      ::nparam_per_noder=28 !CHECK MANUALLY which of them are real
@@ -55,7 +57,7 @@ integer,public, parameter      ::nparam_per_nodei=7  !CHECK MANUALLY which of th
 integer,public, parameter      ::ngcb=17             !CHECK MANUALLY number of genetically affectable cell behaviours ! >>> Is 5-2-14 !>>> TT 24-9-2021
 integer,public, parameter      ::nga=nparam_per_node+ngcb  ! this is the number of genetically affectable node and cell parameters 
                                                      !if the number of parameters that can be affected by genes
-integer,public, parameter      ::nfu=28              !CHECK MANUALLY number of basic forces ! >>> Is 18-4-15 !!>> HC 30-11-2020 !!>> TT 21-9-2021
+integer,public, parameter      ::nfu=60             !Is 9-8-24 JUST MAKE IT BIG !CHECK MANUALY >>> Is 18-4-15 
 integer,public, parameter      ::nfi=14              !CHECK MANUALLY number of filters !!>>HC 17-2-2021
 integer,public                 ::nvarglobal_out   !numero de vars que no son params
 integer,public, allocatable    ::ffu(:)           !matrix of flags for which functions are in use
@@ -78,6 +80,17 @@ integer,public                 ::ndmax            !maximal number of nodes if th
 real*8 ,public                 ::prec             !numerical accuracy when using adaptive stepsize (optional) ! >>> Is 26-8-14
 real*8 ,public                 ::dif_req          !diffusion of req ! Is 11-6-14
 real*8 ,public                 ::min_comp         !minimal value of the compression of nodes to allow the addition of new nodes Is 21-6-14
+
+! >>> Is 22-9-24
+real*8 ,public                 ::mincod           !minimal value of cod allowed, expressed in proportion to the eqd in the initial conditions, it should be very negative 
+real*8 ,public                 ::maxcod           !maximal value of cod allowed, expressed in proportion to the eqd in the initial conditions
+real*8 ,public                 ::minpld           !minimal value of pld allowed, expressed in proportion to the eqd in the initial conditions, it should be very negative 
+real*8 ,public                 ::maxpld           !maximal value of pld allowed, expressed in proportion to the eqd in the initial conditions
+real*8 ,public                 ::minvod           !minimal value of voc allowed, expressed in proportion to the eqd in the initial conditions, it should be very negative 
+real*8 ,public                 ::maxvod           !maximal value of voc allowed, expressed in proportion to the eqd in the initial conditions
+real*8 ,public                 ::mineqd           !minimal value of eqd allowed, expressed in proportion to the eqd in the initial conditions, it should be very negative 
+real*8 ,public                 ::maxeqd           !maximal value of eqd allowed, expressed in proportion to the eqd in the initial conditions
+! <<< Is 22-9-24
 ! variables that are directly derived fromt the parameters
 
 ! de implementacio MATEMATICA
@@ -119,6 +132,7 @@ real*4, public                 ::realq
 real*8, public, allocatable    ::px(:),py(:),pz(:),dex(:)  !vectors for storing the vectors and differentials of movement     !>>>> Miquel 17-6-13
 integer, public, allocatable   ::neigh(:,:) !it stores in each interation who is interacting with you
 integer, public, allocatable   ::nneigh(:)  !the number of those
+integer, public, allocatable   ::ilastdiv(:) ! >>> Is 9-9-23
 real*8 , public, allocatable   ::dneigh(:,:)!the distances between those
 integer, public, allocatable   ::dif_nneigh(:)  !the number of those neighbors affected by diffusion!  !>>Miquel24-2-14
 integer, public   ::ndch !!>> HC 15-6-2021 number of nodes in the co_grid
@@ -147,6 +161,7 @@ real*8, public :: maxcycl   !>>HC 11-2-2021 Maximun number value of the sum of c
 real*8, public :: newfase   !>>HC 14-9-2021 Maximum value for the cell fase after division
 real*8, public :: maxelong  !>>TT 30-9-2021 Maximum elongation factor when cells are polarized
 integer, public :: whichend !!>> HC 26-2-2021 This stores the reason why this embryo was filtered
+real*8, public  :: max_change_node_prop ! >>> Is 21-7-24 maximal proportional change allowed for a node property
 
 character*140, public :: tarfitmorphfile  !file with the fittest morphology for comparing other morphologies (e.g. in conservative_R) !!>> HC 30-6-2020
 real*8 :: distfitmag, distfitscale        !parameters for fitness calculation.  !!>> HC 30-6-2020
@@ -159,6 +174,8 @@ integer, public :: tellme2, ndu !!>> HC 18-9-2020 This is to store the first ite
 real*8, public :: nodeoini(35,2)    ! for nexus2
 real*8,public,allocatable :: nodeu(:,:)  ! for nexus2
 integer, public :: ndoo,ndo=0 ! for nexus2
+
+real*8, public :: distfordelta     !!>> AL 8-4-25 minumum distances between nodes at a given iteration. this is for calculating genetic timestep size 
 
 type, public                   ::nod      ! tipus node
 
@@ -191,7 +208,7 @@ type, public                   ::nod      ! tipus node
      real*8                    ::dif      !25 differentiation state of the node, 0 is no differentiation, 1 is total differentiation
      real*8                    ::kfi      !26 elastic constant for hold node                                    !>>Miquel21-2-14
      real*8                    ::pla      !27 plasticity constant for epithelial plastic deformation            !
-     real*8                    ::kvol     !28 volume conservation constant for epithelial plastic deformation   !
+     real*8                    ::voc     !28 volume conservation constant for epithelial plastic deformation   !
 
      integer                   ::tipus    !29 els centres son tipus=2 i el subcentres tipus=4
      integer                   ::icel     !30 diu a quina cel pertany, son tres pels nodes al marge de la cel epi
@@ -239,6 +256,9 @@ real*8 , public                ::desplacament,ene
 
 !variables de implementacio: contadors 
 integer, public                ::itv
+real*8 , public                ::orival_apical,orival_basal,orival_other,orival_total !>>> Is 23-9-24
+                                        !>>> Is 23-9-24 the average value of eqd in the initial condition 
+                                        ! that we use as a reference
 
 !les tipiques
 integer, public                ::i,j,k,ii,jj,kk,iii,jjj,kkk,iiii,jjjj,kkkk,iiiii,jjjjj,kkkkk
@@ -252,7 +272,7 @@ character*3 cad,cae,caf
 character*41 winame
 
 !de visualitzacio
-integer, parameter :: fprint=100
+integer, parameter :: fprint=1000
 
 ! CONSTANTS  CONSTANTS  CONSTANTS  CONSTANTS  CONSTANTS  CONSTANTS  CONSTANTS  CONSTANTS   CONSTANTS 
 ! matematiques
@@ -282,11 +302,15 @@ subroutine iniarrays
     allocate(dneigh(nda,mnn))
     if (allocated(nneigh)) deallocate(nneigh)
     allocate(nneigh(nda))
+      if (allocated(ilastdiv)) deallocate(ilastdiv)  ! >>> Is 16-9-24
+      allocate(ilastdiv(nda))                        ! >>> Is 16-9-24
+      ilastdiv=0                        ! >>> Is 16-9-24 
+!    end if                                         ! >>> Is 16-9-24
    
     neigh=0
     dneigh=0.0d0
     nneigh=0
-
+!    ilastdiv=0
    !only necessary when using simple boxes neighbor search
     !if (allocated(dif_nneigh)) deallocate(dif_nneigh)
     !allocate(dif_nneigh(nda))
@@ -367,7 +391,7 @@ subroutine iniarrays
      node(:)%dif=0
      node(:)%kfi=0
      node(:)%pla=0
-     node(:)%kvol=0
+     node(:)%voc=0
      node(:)%tipus=0
      node(:)%icel=0
      node(:)%altre=0

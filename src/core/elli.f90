@@ -63,7 +63,6 @@ type(c_ptr) point
 
 !this is necessary to accomadate to different versions of linux
 call random_seed(size = nseed)
-print*,nseed
 call getarg(2,cu)
 if (len_trim(cu)==1) then
   read (cu,*) aut
@@ -147,7 +146,7 @@ if (aut/=5) then
  call system(ordre)
  open(1,file="notafile")
  read(1,*) ii
-print*,"ii",ii
+!print*,"esta putisima mierda no funciona",ii
  if(ii==0)then           !>>Miquel1-10-14
    call read_config_file !>>Miquel8-9-14
  else
@@ -164,7 +163,6 @@ call initials
 winame=adjustl(winame)
 !print *,winame,"winame"
 
-print *,nd,"nd"
 if (aut/=1.and.aut/=5) then !>>> Is 22-1-14
 
 
@@ -178,8 +176,8 @@ if (aut/=1.and.aut/=5) then !>>> Is 22-1-14
   call glutInitWindowPosition(1000,1000)        !>>>>>>Miquel21-2-14
   call glutInitWindowSize(windW,windH)        !>>>>>>Miquel26-11-13
 
-  winid = glutCreateWindow(winame)
-  !winid = glutCreateWindow("w")
+  !winid = glutCreateWindow(winame)
+  winid = glutCreateWindow("emaker ")
 
   !initialize view_modifier, receiving the id for it's submenu
   submenuid = view_modifier_init()
@@ -194,10 +192,9 @@ if (aut/=1.and.aut/=5) then !>>> Is 22-1-14
 
   call glutReshapeFunc(Reshape) 
 
-
   ! set the lighting conditions
-  call glClearColor(0.0_glclampf, 0.0_glclampf, 0.0_glclampf, 1.0_glclampf)
-  !call glClearColor(1.0_glclampf, 1.0_glclampf, 1.0_glclampf, 1.0_glclampf)
+  !call glClearColor(0.0_glclampf, 0.0_glclampf, 0.0_glclampf, 1.0_glclampf) !AL 15-6-25: black background
+  call glClearColor(1.0_glclampf, 1.0_glclampf, 1.0_glclampf, 1.0_glclampf) !AL 15-6-25: white background
   call glLightfv(gl_light0, gl_diffuse, (/1.,1.,1.,1./))
   call glLightfv(gl_light0, gl_position, (/1.5,-.5,2.0,0.0/))
   call glEnable(gl_lighting)
@@ -205,6 +202,7 @@ if (aut/=1.and.aut/=5) then !>>> Is 22-1-14
   call glLightModelfv(gl_light_model_ambient, (/.5,.5,.5,1./))
   call glDepthFunc(gl_lequal)
   call glEnable(gl_depth_test)
+  winame="EMaker"
   call inivisualitzacio 
 
 end if

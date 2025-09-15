@@ -42,6 +42,7 @@ contains
 
 subroutine default_values  !IS 2-1-14
 
+    nparam=42
     ndmax=100000
     ecmmax=0.25d0
     realtime=0
@@ -57,6 +58,14 @@ subroutine default_values  !IS 2-1-14
     angletor=0.00 !Miquel15-9-14
     ldi=epsilod
     maxad=15.0d0 !!>> HC 16-6-2020
+    mincod=-1000000
+    maxcod=1000000
+    minpld=-1000000
+    maxpld=1000000
+    minvod=-1000000
+    maxvod=1000000
+    mineqd=-1000000
+    maxeqd=1000000
 
 end subroutine
 
@@ -135,7 +144,7 @@ mxch=0.0d0; mych=0.0d0; mzch=0.0d0                                       !!>>HC 
 if (allocated(node))deallocate(node); allocate(node(1:nda))              !!>>HC 18-3-2021 
 if (allocated(cels))deallocate(cels); allocate(cels(1:ncals))            !!>>HC 18-3-2021
 if(allocated(nodeo)) deallocate(nodeo); allocate(nodeo(nda))             !!>>HC 18-3-2021
-call iniarrays
+ call iniarrays
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!                           !!>>HC 18-3-2021
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!                           !!>>HC 18-3-2021
@@ -219,7 +228,7 @@ do ich=1,nd                                                              !!>>HC 
    node(ich)%eqs=0.150d0; node(ich)%hoo=10.0d0                           !!>>HC 18-3-2021
    node(ich)%mov=0.010d0; node(ich)%dmo=0.0010d0                         !!>>HC 18-3-2021
    node(ich)%pla=0.0d0                                                   !!>>HC 18-3-2021
-   node(ich)%cod=0.0d0;  node(ich)%kvol=0.0d0; node(ich)%pld=0.0d0       !!>>HC 18-3-2021
+   node(ich)%cod=0.0d0;  node(ich)%voc=0.0d0; node(ich)%pld=0.0d0       !!>>HC 18-3-2021
 enddo                                                                    !!>>HC 18-3-2021
   
 !!!!!NODE POSITIONS!!!!!!!!!!                                            !!>>HC 18-3-2021 HERE WE DECIDE NODE POSITIONS (FIBONACCI SPHERE)
@@ -538,7 +547,7 @@ do ich=1,nd                                                              !!>>HC 
    node(ich)%eqs=0.150d0; node(ich)%hoo=10.0d0                           !!>>HC 18-3-2021
    node(ich)%mov=0.010d0; node(ich)%dmo=0.0010d0                         !!>>HC 18-3-2021
    node(ich)%pla=0.050d0                                                   !!>>HC 18-3-2021
-   node(ich)%cod=0.0d0;  node(ich)%kvol=0.50d0; node(ich)%pld=0.0d0      !!>>HC 18-3-2021
+   node(ich)%cod=0.0d0;  node(ich)%voc=0.50d0; node(ich)%pld=0.0d0      !!>>HC 18-3-2021
 enddo                                                                    !!>>HC 18-3-2021
   
 !!!!!NODE POSITIONS!!!!!!!!!!                                            !!>>HC 30-3-2021 ICOSAHEDRUM COORDINATES  
@@ -846,7 +855,7 @@ subroutine epi_mes
         node(i)%mov=temp
         node(i)%dmo=desmax
         node(i)%pla=1d0
-        node(i)%kvol=1d1
+        node(i)%voc=1d1
       end do
     end if
 
@@ -2258,7 +2267,7 @@ end subroutine
 
 subroutine invagination  !Changed some parameters, now there is only contraction on the apical side (no expansion on the basal).
                          !Instead volume conservation and plasticity do the trick. But in order to work properly the apical contracting
-                         !nodes have to have %pla=0 and %kvol=0 (only those)     !>>Miquel28-7-14
+                         !nodes have to have %pla=0 and %voc=0 (only those)     !>>Miquel28-7-14
 
 
 !******* #1 DEFINING SPATIAL DIMENSIONS *******
@@ -2394,7 +2403,7 @@ subroutine invagination  !Changed some parameters, now there is only contraction
         node(i)%erp=20d0
         node(i)%est=60d0
         node(i)%pla=2d0
-        node(i)%kvol=5d-1
+        node(i)%voc=5d-1
         node(i)%mov=temp
         node(i)%dmo=desmax
       end do
@@ -2508,7 +2517,7 @@ subroutine invagination  !Changed some parameters, now there is only contraction
         j=node(i)%icel
         if (j<8) then
           node(i)%pla=0d0
-          node(i)%kvol=0d0
+          node(i)%voc=0d0
           if (node(i)%tipus==1) then
             gex(i,1)=1.0d0
           else
@@ -6572,7 +6581,7 @@ subroutine epi_mes_ecm
         node(i)%mov=temp
         node(i)%dmo=desmax
         node(i)%pla=1d0
-        node(i)%kvol=1d0
+        node(i)%voc=1d0
         node(i)%ecm=0d0
       end do
     end if
@@ -10439,7 +10448,7 @@ subroutine epi_mes_bud
         !node(i)%est=1d0
         node(i)%mov=temp
         node(i)%dmo=desmax
-        node(i)%pla=1d-2 ; node(i)%kvol=3d-5
+        node(i)%pla=1d-2 ; node(i)%voc=3d-5
         node(i)%kfi=khold
         node(i)%dif=0d0
       end do
@@ -11205,7 +11214,7 @@ subroutine feather_placode
         node(i)%dif=0d0
         node(i)%kfi=khold
         node(i)%pla=5d-2
-        node(i)%kvol=5d-2
+        node(i)%voc=5d-2
       end do
     end if
 
@@ -11745,7 +11754,7 @@ subroutine epi_mes_bud_ingrowth
         node(i)%dif=0d0
         node(i)%kfi=khold
         node(i)%pla=5d-2
-        node(i)%kvol=1d-2
+        node(i)%voc=1d-2
       end do
     end if
 
@@ -12825,7 +12834,7 @@ node(138)%marge=0
 
 dif_req=1.d-1    ! Is 11-6-14
 node(:)%pla=1d-3
-node(:)%kvol=1d-1
+node(:)%voc=1d-1
 prop_noise=1d-2
 
 reqmin=1d-3
@@ -13316,7 +13325,7 @@ subroutine tooth_bud
         node(i)%dif=0d0
         node(i)%kfi=khold
         node(i)%pla=1d-2
-        node(i)%kvol=1d-1
+        node(i)%voc=1d-1
       end do
     end if
 
@@ -13753,7 +13762,7 @@ subroutine delta_notch
         node(i)%dif=0d0
         node(i)%kfi=khold
         node(i)%pla=5d-2
-        node(i)%kvol=5d-2
+        node(i)%voc=5d-2
       end do
     end if
 
@@ -14179,7 +14188,7 @@ subroutine receptor_ligand_test
         node(i)%dif=0d0
         node(i)%kfi=khold
         node(i)%pla=5d-2
-        node(i)%kvol=5d-2
+        node(i)%voc=5d-2
       end do
     end if
 
@@ -14627,7 +14636,7 @@ nodecel=2
         node(i)%dmo=desmax
         node(i)%dif=0d0
         node(i)%kfi=1d1
-    node(i)%kvol=1d0
+    node(i)%voc=1d0
     node(i)%pla=1.9d-1
       end do
     end if
@@ -15081,7 +15090,7 @@ nodecel=2
         node(i)%dmo=desmax
         node(i)%dif=0d0
         node(i)%kfi=1d1
-    node(i)%kvol=5d0
+    node(i)%voc=5d0
     node(i)%pla=5.0d0
         node(i)%ecm=0d0
       end do
@@ -15532,7 +15541,7 @@ nodecel=2
         node(i)%dmo=desmax
         node(i)%dif=0d0
         node(i)%kfi=1d1
-    node(i)%kvol=1d0
+    node(i)%voc=1d0
     node(i)%pla=1.9d-1
       end do
     end if
@@ -15822,7 +15831,8 @@ integer            ::radi,radicel,valcel
 
 integer::trobat,cont,rep,n,i,j,k,ii,jj,kk,lev,numdos,ncels2,val,val2,ll,val3,val4,val5,val6,iiii,jjjj,kkkk,suma,cocels
 real*8::modul,pescab,pescac,pescbc,modula,modulb,modulc,aax,aay,aaz,bbx,bby,bbz,ccx,ccy,ccz,costat,rhex,lad,ax,ay,az,di
-real*8::alf,bet,gam,a,b,c,l,aa,bb,cc,aaa,bbb,ccc,angle,rpent,modmin,pesc,radius,radius2,bx,by,bz,cost,ucost,sint,thet,radicelepisphere
+real*8::alf,bet,gam,a,b,c,l,aa,bb,cc,aaa,bbb,ccc,angle,rpent,modmin,pesc,radius,radius2,bx,by,bz,cost,ucost,sint
+real*8:: thet,radicelepisphere
 real*8,dimension(:)::minu(3),vec1(3),vec2(3),vec3(3),vec4(3),vec5(3)
 real*8,allocatable::cmalla(:,:),cveci(:,:),primers(:)
 
@@ -16501,7 +16511,7 @@ subroutine epi_hierarchic
         node(i)%dif=0d0
         node(i)%kfi=khold
         node(i)%pla=0d0
-        node(i)%kvol=1d-1
+        node(i)%voc=1d-1
       end do
     end if
 
@@ -17676,7 +17686,7 @@ subroutine test_RD
         node(i)%dmo=0.00
         node(i)%dif=0d0
         node(i)%pla=1d0
-        node(i)%kvol=1d0
+        node(i)%voc=1d0
         node(i)%kfi=khold
       end do
     end if
@@ -18225,7 +18235,7 @@ integer, allocatable::cell_grid_epi(:,:),cell_grid_mes(:,:,:)
         node(i)%dif=0d0
         node(i)%kfi=khold
         node(i)%pla=1d1
-        node(i)%kvol=1d1
+        node(i)%voc=1d1
       end do
     !end if
 

@@ -37,6 +37,7 @@ contains
 !**************************************************************************
 subroutine initials
 character*200 kk
+integer i,j,k
   itvi=1
   itviactual=1
   call getarg(1,carg)
@@ -75,13 +76,66 @@ character*200 kk
      call fill_co_griders                          !!>>HC 17-6-2021
      call restore_neighbors                        !!>>HC 17-6-2021
   endif                                            !!>>HC 6-7-2021
+
+  ! transformacions cutres
+!  node(:nd)%adh=1d-1
+!  nodeo(:nd)%adh=1d-1
+!  node(:nd)%pld=0.0d0
+!  nodeo(:nd)%pld=0.0d0
+
   call put_param_to_matrix(param)
   paramo=param
 
-
   if(aut>0)  call writesnapini    !here we write the output file with the initial conditions              !>>>>Miquel18-11-13
 
+  call calculate_orival ! >>> Is 23-9-24
+  
+  ! >>> Is 23-9-24  
+  do i=1,ng
+    if (gen(i)%diffu>0) then
+      ddm(i)=1d0/gen(i)%diffu
+    else
+      ddm(i)=0
+    end if
+!print *,ddm(i),"kol"
+  end do
+  ! <<< Is 23-9-23
 end subroutine
+
+!********************************************************************************************
+subroutine calculate_orival !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  integer i,j,k,ii,jj,kk
+  real*8 a,b,c,d
+  a=0
+  b=0
+  c=0
+  d=nd
+  ii=0
+  jj=0
+  kk=0
+  do i=1,nd
+    if (node(i)%tipus==1) then
+      a=a+nodeo(i)%eqd
+      ii=ii+1
+    else
+      if (node(i)%tipus==2) then
+        b=b+nodeo(i)%eqd
+        jj=jj+1      
+      else
+        if (node(i)%tipus>2) then
+          c=c+nodeo(i)%eqd
+          kk=kk+1        
+        end if
+      end if
+    end if
+  end do
+  orival_apical=a/real(ii)
+  orival_basal=b/real(jj)
+  orival_other=c/real(kk)
+  orival_total=orival_apical+orival_basal
+  
+end subroutine
+!<<< Is 23-9-24
 
 !**************************************************************************
 subroutine default_ic

@@ -1,3 +1,4 @@
+
 !    EmbryoMaker software (General Node Model)
 !    Computational model to simulate morphogenetic processes in living organs and tissues.
 !    Copyright (C) 2014 Miquel Marin-Riera, Miguel Brun-Usan, Roland Zimm, Tommi Välikangas & Isaac Salazar-Ciudad
@@ -99,7 +100,7 @@ el: do ci=1,ncels
 
       if(grate==0) cycle !there is no growth
 
-      if(iii==0) then;grac=grate;goto 123;end if !all nodes are full, goes directly to add a new node
+      if(iii==0) then;grac=grate;goto 1234;end if !all nodes are full, goes directly to add a new node
 
       if(node(iii)%tipus<3) grate=0.5d0*grate  !since there are two nodes growing, the rate per node is half
 
@@ -152,7 +153,7 @@ el: do ci=1,ncels
 
 
         !Adding a new node
-123     if (ffu(1)==1) then !ACHTUNG
+1234     if (ffu(1)==1) then !ACHTUNG
         if(cels(ci)%ctipus<3)then             ! We add at most a node per cell per iteration
           !epithelial
           a=0 ; ii=0
@@ -237,7 +238,7 @@ el: do ci=1,ncels
           if (a<min_comp) cycle ! if the compresion per node in the cell is too large (in negative) then we do not add nodes
 
           print *,"WARNING: we are adding more than one node per cell per iteration"
-          goto 123  ! >>> Is 1-7-14 this makes that one can add more than one per cell and iteration
+          goto 1234  ! >>> Is 1-7-14 this makes that one can add more than one per cell and iteration
         end if      ! THIS IS NECESSARY OTHERWISE THE BEHAVIOUR OF THE MODEL DEPENDS ON WHETHER WE USE DYNAMIC DELTA OR NOT
 end if
       end if
@@ -1080,6 +1081,7 @@ end subroutine
 
 subroutine addanode(i)
 integer::i,j,ic,icc,ii,jj,kk,kkk,kkkk,kkkkk,tipi,celi,cont
+integer:: is !>>> Is 12-9-24
 integer,allocatable::clist(:)
 real*8,allocatable::cgex(:,:)
 real*8::ix,iy,iz,cx,cy,cz,ccx,ccy,ccz,d,dd,pesc,maxd,ee,aa,bb,cc,aaa,bbb,ccc,b
@@ -1092,6 +1094,7 @@ real*8,allocatable::cvcil(:),cvtor(:),cvstor(:),cvspr(:)              !>>>>>Miqu
 integer,allocatable::cneigh(:,:),cnneigh(:)                    !<<< Is 30-4-15
 real*8,allocatable::cdneigh(:,:)                               !>>> Is 30-4-15
 real*8,allocatable::cfmeanv(:),cfmeanl(:),cdidpol(:,:)
+integer,allocatable::cilastdiv(:) 
 
   iik=node(i)%icel
   tipi=node(i)%tipus
@@ -1292,19 +1295,29 @@ real*8,allocatable::cfmeanv(:),cfmeanl(:),cdidpol(:,:)
     deallocate(dex);allocate(dex(nda))
     dex=0
     dex(1:nd)=cdex(1:nd)
-
     allocate(cvcil(nd),cvtor(nd),cvstor(nd),cvspr(nd))  !force components storing arrays !>>>>>>>>>>>>>> Miquel 20-6-13
-    allocate(cneigh(nda,omnn))
-    cneigh(1:nd,:)=neigh(1:nd,:)
+    allocate(cneigh(nda,omnn*4)) !>>> Is 12-9-24
+    ii=ubound(neigh,2)           !>>> Is 12-9-24
+    cneigh(1:nd,:ii)=neigh(1:nd,:ii) !>>> Is 12-9-24
     deallocate(neigh)
-    allocate(neigh(nda,omnn))
-    neigh(:nd,:)=cneigh(:nd,:)
+    allocate(neigh(nda,omnn*4))  ! >>> IS 12-9-24
+    neigh(:nd,:ii)=cneigh(:nd,:ii) ! >>> Is 12-9-24
     deallocate(cneigh)
-    allocate(cdneigh(nda,omnn))
-    cdneigh(1:nd,:)=dneigh(1:nd,:)
+      allocate(cilastdiv(nda))
+      cilastdiv(1:nd)=ilastdiv(1:nd)
+      deallocate(ilastdiv)
+      allocate(ilastdiv(nda))
+      ilastdiv=0
+      ilastdiv(:nd)=cilastdiv(:nd)
+      deallocate(cilastdiv)      
+    !>>> Is 16-9-24
+
+    allocate(cdneigh(nda,omnn*4))
+    ii=ubound(dneigh,2)           !>>> Is 12-9-24    
+    cdneigh(1:nd,:ii)=dneigh(1:nd,:ii)
     deallocate(dneigh)
-    allocate(dneigh(nda,omnn))
-    dneigh(:nd,:)=cdneigh(:nd,:)
+    allocate(dneigh(nda,omnn*4))  !>>> Is 12-9-24
+    dneigh(:nd,:ii)=cdneigh(:nd,:ii)  !>>> Is 12-9-24
     deallocate(cdneigh)
     allocate(cnneigh(nd))
     cnneigh(1:nd)=nneigh(1:nd)
@@ -1392,7 +1405,6 @@ real*8,allocatable::cfmeanv(:),cfmeanl(:),cdidpol(:,:)
   if (tipi<3) then
     if (ffu(1)==0) node(nd)%marge=0 ! >>> Is 6-10-14 it is necessary if each mesenchymal cell is a single node
   end if
-
 end subroutine
 
 

@@ -21,12 +21,12 @@
 ! This could either be used for conservative evolution or for evolution towards a target morphology
 ! EMD and D2 measures courtesy of PF H
 
-
 module conservative_R
 
   use general
   use neighboring
   use io
+  use genetic
   
   implicit none
   
@@ -48,24 +48,22 @@ module conservative_R
   integer:: epi_nd, epind, ndp 
   real*8::a,b,c, storenorm
   
- ! print *, "starting comparison..."
-    
+  print *, "starting comparison..."
+  
   if (len(trim(tarpernofi))==0 .and.tarindalloc==0) then
     print *, "conservative_R error -> simple_EMD: target individual not specified; set distance very large"
     EMDval=1d18
     return
   else if (tarindalloc==0) then !we have to read the file with the target individual now
-  
+   ! print*,pernofi2
     call read_targetind(center, tarpernofi)
   
   else if (len(trim(tarpernofi))/=0 .and.tarindalloc==1) then
     ! print *, "conservative_R warning -> simple_EMD: Target individual already specified, overriding stored morphology" !!>> HC 30-11-2020 Optimizing less prints
     call read_targetind(center, tarpernofi)
-  
   endif
   
   !!! Read the individual to be compared to the target
-  
   call readsnap(pernofi2)
   
   epi_nd=0
@@ -125,6 +123,8 @@ module conservative_R
  
   end if
  
+print*,'epind',epind
+
 !now EMD
    d=0.0d0
    do i=1,epi_nd
@@ -145,9 +145,12 @@ module conservative_R
         end do          
         d=d+aa/storenorm
    enddo
+   print*,'d ',d,aa,storenorm
    EMDval=d/real(epi_nd+tar_epind)
+   !print*,'EMDval',EMDval
    !if (center) d2=d/centroid_size
    !print *, "I find a val of ", EMDval
+  
   
 end subroutine simple_EMD  
 
@@ -159,9 +162,10 @@ subroutine read_targetind(center, tarpernofi)
   character*140 :: tarpernofi
   integer::epind
   
-  !print *, "entering readtargetind"
+  print *, "entering readtargetind"
+  call iniread                         !!important
   call readsnap(tarpernofi)
-  
+  print *, tarpernofi
   !how many epithelial nodes are there?
   tar_epind=0
   do i=1,nd
@@ -207,6 +211,61 @@ subroutine read_targetind(center, tarpernofi)
   end if
 
 end subroutine read_targetind
+
+
+subroutine read_targetind_normCS(tarpernofi) !!AL 15-5-25
+
+  character*140   :: tarpernofi
+  integer         :: epind
+  real*8          :: suma,CS
+
+  print *, "entering readtargetind"
+  call iniread                         !!important
+  call readsnap(tarpernofi)
+
+  !print *, tarpernofi
+  !how many epithelial nodes are there?
+  tar_epind=0
+  do i=1,nd
+     if(node(i)%tipus>2)cycle  
+     tar_epind=tar_epind+1
+  enddo
+  
+  !now we transfer the coordinates of the individual to matrix tarind
+    if (allocated(tarind)) deallocate(tarind)
+    allocate(tarind(tar_epind,4))
+         
+    epind=0
+    
+    do i=1,nd
+      if(node(i)%tipus>2)cycle  
+      epind=epind+1
+      tarind(epind,1)=node(i)%x
+      tarind(epind,2)=node(i)%y
+      tarind(epind,3)=node(i)%z
+      tarind(epind,4)=node(i)%eqd  !!>>HC 30-6-2020
+    end do
+      
+   tarcentroidx=sum(tarind(:,1))/epind     !centroid
+   tarcentroidy=sum(tarind(:,2))/epind
+   tarcentroidz=sum(tarind(:,3))/epind 
+
+   do i=1,epind
+      tarind(i,1)=tarind(i,1)-tarcentroidx   !centering 
+      tarind(i,2)=tarind(i,2)-tarcentroidy
+      tarind(i,3)=tarind(i,3)-tarcentroidz
+   end do
+    
+   !calculate centroid size 
+   suma = 0
+   do i=1,epind
+      suma = suma + sum(tarind(i,:)**2)
+   end do
+
+   CS = sqrt(suma)
+   tarind = tarind/CS
+
+end subroutine read_targetind_normCS
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -472,7 +531,6 @@ real*8 :: EMDval, centroidx, centroidy, centroidz, req1, storenorm, tarreq
 if (allocated(orinodes)) deallocate(orinodes)                !!>> HC 24-9-2021
 allocate(orinodes(nd,4))                               !!>> HC 24-9-2021
 
-
 if (allocated(compind)) deallocate(compind)                !!>> HC 24-9-2021
 allocate(compind(nd,4))                               !!>> HC 24-9-2021
 
@@ -507,7 +565,7 @@ epind=0
 do ich=1,nd
    if(node(ich)%tipus.ne.2)cycle
    epind=epind+1
-   if (orinodes(ich,1)>0.0d0)then
+   if (orinodes(ich,1)>0.0d0)then                                    !!>> AL 23-1-25 plane of symmetry is XZ
       lch=lch+1
       compind(lch,1)=orinodes(ich,1)                                            !!>> HC 24-9-2021
       compind(lch,2)=orinodes(ich,2)                                           !!>> HC 24-9-2021
@@ -521,8 +579,6 @@ do ich=1,nd
       tarind(kch,4)=orinodes(ich,4)  !!>>HC 30-6-2020                        !!>> HC 24-9-2021
    endif
 enddo
-
- 
 
 !now EMD                                                                        !!>> HC 24-9-2021
    d=0.0d0                                                                      !!>> HC 24-9-2021
@@ -623,10 +679,9 @@ subroutine check_ranges(rangfile,onetwin)
      if (node(ich)%grd<minl)then; limit=2; lch=22; wrongval=node(ich)%grd; exit;  endif      !!>> HC 28-9-2021
   enddo                                                                                      !!>> HC 28-9-2021
   
-  
   if (limit>0)then                            !!>> HC 28-9-2021 If limits have been surpased, we kill this individual
      open(819,file="individual.datfitness")   !!>> HC 28-9-2021
-     write(819,*) "0.00"                      !!>> HC 28-9-2021
+     write(819,*) "1000"                      !!>> HC 28-9-2021
      close(819)                               !!>> HC 28-9-2021
   endif                                       !!>> HC 28-9-2021
   
@@ -655,8 +710,1053 @@ subroutine check_ranges(rangfile,onetwin)
      cx="rm "//trim(onetwin)//".loga"                                                                       !!>> HC 6-10-2021
      call system(cx)                                                                                        !!>> HC 29-9-2021
   endif                                                                                                     !!>> HC 28-9-2021
+end subroutine
+
+subroutine assymetry(dieornot)                                                                !!>> AL 19-4-2024 !!>> AL 23-1-25: asymmetry* you illiterate 
+  integer :: dieornot
+  real*8 :: fithc, ifithc, mefithc, emd                                                       !!>> HC 3-7-2023
+  real*8 :: osfithc, otfithc, offithc, stfithc, sffithc, tffithc, symch                       !!>> HC 26-11-2020
+  character*140 :: onetwin, comando                                                           !!>> AL 19-4-2024    
+  integer ::  ihc, jhc, khc, nnodes, naltech, surface, volume, outside, total, inside, differ, centrow
+  integer ::  iihc,jjhc,kkhc, ord1, ord2, ord3, lhc, prev, changes, mhc, nhc, neich, neichi, newdots, vhc, phc
+  real*8, dimension(1:3) ::  u
+  real*8 :: upv, sumd,  modu, ahc, bhc, chc, ahc2, bhc2, chc2, ahc3, bhc3, chc3, u1, u2, pershared
+  real*8 :: maxx, minx, maxy, miny, maxz, minz, maxadd, minadd, anchx, anchy, anchz, anchadd, totmax, totmin, totanch
+  real*8, allocatable, dimension(:,:) :: ncoords
+  integer, allocatable, dimension(:,:,:) :: bfillz
+  logical :: existes                                                                          !!>> AL 19-4-24
+  fithc=0.0d0; ifithc=0.0d0 ; mefithc=0.0d0                                                   !!>> HC 26-11-2020
+  osfithc=0.0d0; otfithc=0.0d0; offithc=0.0d0; stfithc=0.0d0; sffithc=0.0d0; tffithc=0.0d0    !!>> HC 26-11-2020
+  distfitscale=2.250d0; distfitmag=1.0d0
+  !call getarg(1,onetwin)
+
+  !print*, onetwin
   
- end subroutine
+  !call iniread
+  !call readsnap(onetwin)
+  call iniboxes
+  call neighbor_build
+  
+maxx=0.0d0; minx=10000; maxy=0.0d0; miny=10000; maxz=0.0d0; minz=10000                    !!>> HC 4-3-2024
+anchx=0.0d0; anchy=0.0d0; anchz=0.0d0; totmax=0.0d0; totmin=0.0d0; totanch=0.0d0          !!>> HC 4-3-2024
+maxadd=0.0d0                                                                              !!>> HC 4-3-2024
+
+newdots=0                                                                                 !!>> HC 4-3-2024 NUMBER OF NEW POINTS
+do ihc=1,nd                                                                               !!>> HC 4-3-2024 placed randomly to fill in gaps in the epithelium
+   if(node(ihc)%tipus.ne.1)cycle                                                          !!>> HC 4-3-2024
+   newdots=newdots+1                                                                      !!>> HC 4-3-2024
+   do jhc=1,nneigh(ihc)                                                                   !!>> HC 4-3-2024
+      neich=neigh(ihc,jhc)                                                                !!>> HC 4-3-2024
+      if(node(neich)%tipus.ne.1)cycle                                                     !!>> HC 4-3-2024
+      do khc=1,nneigh(neich)                                                              !!>> HC 4-3-2024
+         neichi=neigh(neich,khc)                                                          !!>> HC 4-3-2024
+         if(node(neichi)%tipus.ne.1)cycle                                                 !!>> HC 4-3-2024
+         if(neichi==ihc)cycle                                                             !!>> HC 4-3-2024
+            newdots=newdots+10                                                            !!>> HC 4-3-2024
+      enddo                                                                               !!>> HC 4-3-2024
+   enddo                                                                                  !!>> HC 4-3-2024
+enddo                                                                                     !!>> HC 4-3-2024
+
+if(allocated(ncoords))deallocate(ncoords)                                                 !!>> HC 4-3-2024 This stores the coordinates of the morphology
+allocate(ncoords(1:newdots,1:3))                                                          !!>> HC 4-3-2024  and the newly added random points
+ncoords=0.0d0                                                                             !!>> HC 4-3-2024
+
+ord1=0                                                                                    !!>> HC 4-3-2024 STORE THE COORDINATES OF NODES
+do ihc=1,nd                                                                               !!>> HC 4-3-2024
+   if(node(ihc)%tipus.ne.1)cycle                                                          !!>> HC 4-3-2024
+   ord1=ord1+1                                                                            !!>> HC 4-3-2024
+   ncoords(ord1,1)=node(ihc)%x                                                            !!>> HC 4-3-2024
+   ncoords(ord1,2)=node(ihc)%y                                                            !!>> HC 4-3-2024
+   ncoords(ord1,3)=node(ihc)%z                                                            !!>> HC 4-3-2024
+enddo                                                                                     !!>> HC 4-3-2024
+
+do ihc=1,nd                                                                               !!>> HC 4-3-2024 ADD THE RANDOM POINTS
+   if(node(ihc)%tipus.ne.1)cycle                                                          !!>> HC 4-3-2024
+   do jhc=1,nneigh(ihc)                                                                   !!>> HC 4-3-2024
+      neich=neigh(ihc,jhc)                                                                !!>> HC 4-3-2024
+      if(node(neich)%tipus.ne.1)cycle                                                     !!>> HC 4-3-2024
+      do khc=1,nneigh(neich)                                                              !!>> HC 4-3-2024
+         neichi=neigh(neich,khc)                                                          !!>> HC 4-3-2024
+         if(node(neichi)%tipus.ne.1)cycle                                                 !!>> HC 4-3-2024
+         if(neichi==ihc)cycle                                                             !!>> HC 4-3-2024
+            do phc=1,10                                                                   !!>> HC 4-3-2024
+                ahc = node(neich)%x - node(ihc)%x                                         !!>> HC 4-3-2024
+                bhc = node(neich)%y - node(ihc)%y                                         !!>> HC 4-3-2024
+                chc = node(neich)%z - node(ihc)%z                                         !!>> HC 4-3-2024
+                
+                ahc2 = node(neichi)%x - node(ihc)%x                                       !!>> HC 4-3-2024
+                bhc2 = node(neichi)%y - node(ihc)%y                                       !!>> HC 4-3-2024
+                chc2 = node(neichi)%z - node(ihc)%z                                       !!>> HC 4-3-2024
+                
+                call random_number(u1); call random_number(u2);                           !!>> HC 4-3-2024
+                if ( (u1+u2) > 1.0d0)then                                                 !!>> HC 4-3-2024
+                   u1=1-u1                                                                !!>> HC 4-3-2024
+                   u2=1-u2                                                                !!>> HC 4-3-2024
+                endif                                                                     !!>> HC 4-3-2024
+                
+                ahc3 = u1*ahc + u2*ahc2                                                   !!>> HC 4-3-2024
+                bhc3 = u1*bhc + u2*bhc2                                                   !!>> HC 4-3-2024
+                chc3 = u1*chc + u2*chc2                                                   !!>> HC 4-3-2024
+                ord1=ord1+1                                                               !!>> HC 4-3-2024
+                ncoords(ord1,1)= node(ihc)%x + ahc3                                       !!>> HC 4-3-2024
+                ncoords(ord1,2)= node(ihc)%y + bhc3                                       !!>> HC 4-3-2024
+                ncoords(ord1,3)= node(ihc)%z + chc3                                       !!>> HC 4-3-2024
+            enddo                                                                         !!>> HC 4-3-2024
+      enddo                                                                               !!>> HC 4-3-2024
+   enddo                                                                                  !!>> HC 4-3-2024
+enddo                                                                                     !!>> HC 4-3-2024
+
+do ihc=1,nd                                                                               !!>> HC 4-3-2024 CALCULATE THE BIGGEST COORDINATE IN THE MORPH
+   if(abs(node(ihc)%x)>maxx) maxx=abs(node(ihc)%x)                                        !!>> HC 4-3-2024
+   if(abs(node(ihc)%y)>maxy) maxy=abs(node(ihc)%y)                                        !!>> HC 4-3-2024
+   if(abs(node(ihc)%z)>maxz) maxz=abs(node(ihc)%z)                                        !!>> HC 4-3-2024
+enddo                                                                                     !!>> HC 4-3-2024
+
+totmax=maxx                                                                               !!>> HC 4-3-2024
+if (maxy>totmax) totmax=maxy                                                              !!>> HC 4-3-2024
+if (maxz>totmax) totmax=maxz                                                              !!>> HC 4-3-2024 The biggest coordinate
+
+maxadd=nodeo(1)%add*2                                                                     !!>> HC 4-3-2024
+urv=1/maxadd                                                                              !!>> HC 4-3-2024
+nboxes=(urv*totmax) +2                                                                    !!>> HC 4-3-2024  THE NUMBER OF BOXES
+
+if(allocated(bfillz))deallocate(bfillz)                                                   !!>> HC 4-3-2024 THIS ARRAY STORES THE BOXES
+allocate(bfillz(-nboxes:nboxes,-nboxes:nboxes,-nboxes:nboxes))                            !!>> HC 4-3-2024
+bfillz=0                                                                                  !!>> HC 4-3-2024
+
+do ihc=1,ord1                                                                             !!>> HC 4-3-2024 INTRODUCE THE COORDINATES IN THEIR CORRESPONDING BOXES
+   jhc=nint(ncoords(ihc,1)*urv)                                                           !!>> HC 4-3-2024 
+   khc=nint(ncoords(ihc,2)*urv)                                                           !!>> HC 4-3-2024
+   nhc=nint(ncoords(ihc,3)*urv)                                                           !!>> HC 4-3-2024
+   bfillz(jhc,khc,nhc)=1                                                                  !!>> HC 4-3-2024
+enddo                                                                                     !!>> HC 4-3-2024
+
+bfillz(nboxes,nboxes,nboxes)=2                                                            !!>> HC 4-3-2024 THE FILLING ALGORITHM
+changes=11; ord1=0                                                                        !!>> HC 4-3-2024 Fills with either 2 or 3 the boxes OUTSIDE the morphology
+do while(changes>0)                                                                       !!>> HC 4-3-2024 2-3= OUT
+   changes=0                                                                              !!>> HC 4-3-2024 0= IN
+   do ihc=-nboxes,nboxes                                                                  !!>> HC 4-3-2024 1= SURFACE
+      do jhc=-nboxes,nboxes                                                               !!>> HC 4-3-2024
+         do khc=-nboxes,nboxes                                                            !!>> HC 4-3-2024
+            if( bfillz(ihc,jhc,khc).ne.2)cycle                                            !!>> HC 4-3-2024
+            do nhc=-1,1                                                                   !!>> HC 4-3-2024
+               ord1=ihc+nhc                                                               !!>> HC 4-3-2024
+               if(ord1>nboxes.or.ord1<(-nboxes))cycle                                     !!>> HC 4-3-2024
+               if(bfillz(ord1,jhc,khc).ne.0)cycle                                         !!>> HC 4-3-2024
+               bfillz(ord1,jhc,khc)=2                                                     !!>> HC 4-3-2024
+               changes=changes+1                                                          !!>> HC 4-3-2024
+            enddo                                                                         !!>> HC 4-3-2024
+            do nhc=-1,1                                                                   !!>> HC 4-3-2024
+               ord1=jhc+nhc                                                               !!>> HC 4-3-2024
+               if(ord1>nboxes.or.ord1<(-nboxes))cycle                                     !!>> HC 4-3-2024
+               if(bfillz(ihc,ord1,khc).ne.0)cycle                                         !!>> HC 4-3-2024
+               bfillz(ihc,ord1,khc)=2                                                     !!>> HC 4-3-2024
+               changes=changes+1                                                          !!>> HC 4-3-2024
+            enddo                                                                         !!>> HC 4-3-2024
+            do nhc=-1,1                                                                   !!>> HC 4-3-2024
+               ord1=khc+nhc                                                               !!>> HC 4-3-2024
+               if(ord1>nboxes.or.ord1<(-nboxes))cycle                                     !!>> HC 4-3-2024
+               if(bfillz(ihc,jhc,ord1).ne.0)cycle                                         !!>> HC 4-3-2024
+               bfillz(ihc,jhc,ord1)=2                                                     !!>> HC 4-3-2024
+               changes=changes+1                                                          !!>> HC 4-3-2024
+            enddo                                                                         !!>> HC 4-3-2024
+            bfillz(ihc,jhc,khc)=3                                                         !!>> HC 4-3-2024
+         enddo                                                                            !!>> HC 4-3-2024
+      enddo                                                                               !!>> HC 4-3-2024
+   enddo                                                                                  !!>> HC 4-3-2024
+enddo                                                                                     !!>> HC 4-3-2024
+
+surface=0; volume=0; outside=0; total=0                                                   !!>> HC 4-3-2024  Counting outside and inside boxes
+do ihc=-nboxes,nboxes                                                                     !!>> HC 4-3-2024
+   do jhc=-nboxes,nboxes                                                                  !!>> HC 4-3-2024
+      do khc=-nboxes,nboxes                                                               !!>> HC 4-3-2024
+         if (bfillz(ihc,jhc,khc)==1)then                                                  !!>> HC 4-3-2024
+            surface=surface+1                                                             !!>> HC 4-3-2024
+         elseif(bfillz(ihc,jhc,khc)==0)then                                               !!>> HC 4-3-2024
+            volume=volume+1                                                               !!>> HC 4-3-2024
+         else                                                                             !!>> HC 4-3-2024
+            outside=outside+1                                                             !!>> HC 4-3-2024
+         endif                                                                            !!>> HC 4-3-2024
+      enddo                                                                               !!>> HC 4-3-2024
+   enddo                                                                                  !!>> HC 4-3-2024
+enddo                                                                                     !!>> HC 4-3-2024
+
+if (volume>0)then                                                                         !!>> HC 4-3-2024 If the morphology is not broken
+   total=surface+volume                                                                   !!>> HC 4-3-2024 CALCULATE THE ASYMMETRY BY SHARED VOLUME
+   do ihc=-nboxes,nboxes                                                                  !!>> HC 4-3-2024
+      do jhc=-nboxes,nboxes                                                               !!>> HC 4-3-2024
+         do khc=-nboxes,nboxes                                                            !!>> HC 4-3-2024 Transform all the boxes into 1=IN 0=out
+            if ( bfillz(ihc,jhc,khc).le.1)then                                            !!>> HC 4-3-2024
+               bfillz(ihc,jhc,khc)=1                                                      !!>> HC 4-3-2024
+            else                                                                          !!>> HC 4-3-2024
+               bfillz(ihc,jhc,khc)=0                                                      !!>> HC 4-3-2024
+            endif                                                                         !!>> HC 4-3-2024
+         enddo                                                                            !!>> HC 4-3-2024
+      enddo                                                                               !!>> HC 4-3-2024
+   enddo                                                                                  !!>> HC 4-3-2024
+
+   centrow=0                                                                              !!>> HC 4-3-2024 NON-SHARED VOLUME
+   do ihc=-nboxes,nboxes                                                                  !!>> HC 4-3-2024
+      do jhc=-nboxes,nboxes                                                               !!>> HC 4-3-2024
+      if ( bfillz(ihc,0,jhc)==0)cycle                                                     !!>> HC 4-3-2024  !!>> AL 23-1-25 plane of symmetry is XZ
+      centrow=centrow+1                                                                   !!>> HC 4-3-2024
+      enddo                                                                               !!>> HC 4-3-2024
+   enddo                                                                                  !!>> HC 4-3-2024
+
+   differ=0                                                                               !!>> HC 4-3-2024
+   do ihc=1,nboxes                                                                        !!>> HC 4-3-2024
+      jhc=-ihc                                                                            !!>> HC 4-3-2024
+      do khc=-nboxes,nboxes                                                               !!>> HC 4-3-2024
+         do nhc=-nboxes,nboxes                                                            !!>> HC 4-3-2024
+            if( bfillz(ihc,khc,nhc) == bfillz(jhc,khc,nhc))cycle                          !!>> HC 4-3-2024
+            differ=differ+1                                                               !!>> HC 4-3-2024
+         enddo                                                                            !!>> HC 4-3-2024
+      enddo                                                                               !!>> HC 4-3-2024
+   enddo                                                                                  !!>> HC 4-3-2024
+   symch=real(differ)/real(total-centrow)                                                 !!>> HC 4-3-2024
+else                                                                                      !!>> HC 4-3-2024 if the morphology is broken we will discard it
+   symch=666.0d0                                                                          !!>> HC 4-3-2024
+endif                                                                                     !!>> HC 4-3-2024
+  
+if (symch<0.0500d0) then                                                                  !!>> HC 20-12-2020 We only want robust individuals
+    dieornot=0                                                                            !!>> HC 20-12-2020 The threshold comes my observations
+else                                                                                      !!>> HC 20-12-2020  
+    dieornot=1                                                                            !!>> HC 20-12-2020 Avoid extintion
+endif                                                                                     !!>> HC 20-12-2020
+  
+end subroutine assymetry
  
+subroutine assymetry_save(dieornot)                                                            !!>> AL 19-4-2024 
+   integer :: dieornot
+   real*8 :: fithc, ifithc, mefithc, emd                                                       !!>> HC 3-7-2023
+   real*8 :: osfithc, otfithc, offithc, stfithc, sffithc, tffithc, symch                       !!>> HC 26-11-2020
+   character*140 :: onetwin, comando                                                           !!>> AL 19-4-2024    
+   integer ::  ihc, jhc, khc, nnodes, naltech, surface, volume, outside, total, inside, differ, centrow
+   integer ::  iihc,jjhc,kkhc, ord1, ord2, ord3, lhc, prev, changes, mhc, nhc, neich, neichi, newdots, vhc, phc
+   real*8, dimension(1:3) ::  u
+   real*8 :: upv, sumd,  modu, ahc, bhc, chc, ahc2, bhc2, chc2, ahc3, bhc3, chc3, u1, u2, pershared
+   real*8 :: maxx, minx, maxy, miny, maxz, minz, maxadd, minadd, anchx, anchy, anchz, anchadd, totmax, totmin, totanch
+   real*8, allocatable, dimension(:,:) :: ncoords
+   integer, allocatable, dimension(:,:,:) :: bfillz
+   logical :: existes                                                                          !!>> AL 19-4-24
+   fithc=0.0d0; ifithc=0.0d0 ; mefithc=0.0d0                                                   !!>> HC 26-11-2020
+   osfithc=0.0d0; otfithc=0.0d0; offithc=0.0d0; stfithc=0.0d0; sffithc=0.0d0; tffithc=0.0d0    !!>> HC 26-11-2020
+   distfitscale=2.250d0; distfitmag=1.0d0
+
+   call iniboxes
+   call neighbor_build
+      
+   maxx=0.0d0; minx=10000; maxy=0.0d0; miny=10000; maxz=0.0d0; minz=10000                    !!>> HC 4-3-2024
+   anchx=0.0d0; anchy=0.0d0; anchz=0.0d0; totmax=0.0d0; totmin=0.0d0; totanch=0.0d0          !!>> HC 4-3-2024
+   maxadd=0.0d0                                                                              !!>> HC 4-3-2024
+   
+   newdots=0                                                                                 !!>> HC 4-3-2024 NUMBER OF NEW POINTS
+   do ihc=1,nd                                                                               !!>> HC 4-3-2024 placed randomly to fill in gaps in the epithelium
+      if(node(ihc)%tipus.ne.1)cycle                                                          !!>> HC 4-3-2024
+      newdots=newdots+1                                                                      !!>> HC 4-3-2024
+      do jhc=1,nneigh(ihc)                                                                   !!>> HC 4-3-2024
+         neich=neigh(ihc,jhc)                                                                !!>> HC 4-3-2024
+         if(node(neich)%tipus.ne.1)cycle                                                     !!>> HC 4-3-2024
+         do khc=1,nneigh(neich)                                                              !!>> HC 4-3-2024
+            neichi=neigh(neich,khc)                                                          !!>> HC 4-3-2024
+            if(node(neichi)%tipus.ne.1)cycle                                                 !!>> HC 4-3-2024
+            if(neichi==ihc)cycle                                                             !!>> HC 4-3-2024
+               newdots=newdots+10                                                            !!>> HC 4-3-2024
+         enddo                                                                               !!>> HC 4-3-2024
+      enddo                                                                                  !!>> HC 4-3-2024
+   enddo                                                                                     !!>> HC 4-3-2024
+   
+   if(allocated(ncoords))deallocate(ncoords)                                                 !!>> HC 4-3-2024 This stores the coordinates of the morphology
+   allocate(ncoords(1:newdots,1:3))                                                          !!>> HC 4-3-2024  and the newly added random points
+   ncoords=0.0d0                                                                             !!>> HC 4-3-2024
+   
+   ord1=0                                                                                    !!>> HC 4-3-2024 STORE THE COORDINATES OF NODES
+   do ihc=1,nd                                                                               !!>> HC 4-3-2024
+      if(node(ihc)%tipus.ne.1)cycle                                                          !!>> HC 4-3-2024
+      ord1=ord1+1                                                                            !!>> HC 4-3-2024
+      ncoords(ord1,1)=node(ihc)%x                                                            !!>> HC 4-3-2024
+      ncoords(ord1,2)=node(ihc)%y                                                            !!>> HC 4-3-2024
+      ncoords(ord1,3)=node(ihc)%z                                                            !!>> HC 4-3-2024
+   enddo                                                                                     !!>> HC 4-3-2024
+   
+   do ihc=1,nd                                                                               !!>> HC 4-3-2024 ADD THE RANDOM POINTS
+      if(node(ihc)%tipus.ne.1)cycle                                                          !!>> HC 4-3-2024
+      do jhc=1,nneigh(ihc)                                                                   !!>> HC 4-3-2024
+         neich=neigh(ihc,jhc)                                                                !!>> HC 4-3-2024
+         if(node(neich)%tipus.ne.1)cycle                                                     !!>> HC 4-3-2024
+         do khc=1,nneigh(neich)                                                              !!>> HC 4-3-2024
+            neichi=neigh(neich,khc)                                                          !!>> HC 4-3-2024
+            if(node(neichi)%tipus.ne.1)cycle                                                 !!>> HC 4-3-2024
+            if(neichi==ihc)cycle                                                             !!>> HC 4-3-2024
+               do phc=1,10                                                                   !!>> HC 4-3-2024
+                  ahc = node(neich)%x - node(ihc)%x                                         !!>> HC 4-3-2024
+                  bhc = node(neich)%y - node(ihc)%y                                         !!>> HC 4-3-2024
+                  chc = node(neich)%z - node(ihc)%z                                         !!>> HC 4-3-2024
+                  
+                  ahc2 = node(neichi)%x - node(ihc)%x                                       !!>> HC 4-3-2024
+                  bhc2 = node(neichi)%y - node(ihc)%y                                       !!>> HC 4-3-2024
+                  chc2 = node(neichi)%z - node(ihc)%z                                       !!>> HC 4-3-2024
+                  
+                  call random_number(u1); call random_number(u2);                           !!>> HC 4-3-2024
+                  if ( (u1+u2) > 1.0d0)then                                                 !!>> HC 4-3-2024
+                     u1=1-u1                                                                !!>> HC 4-3-2024
+                     u2=1-u2                                                                !!>> HC 4-3-2024
+                  endif                                                                     !!>> HC 4-3-2024
+                  
+                  ahc3 = u1*ahc + u2*ahc2                                                   !!>> HC 4-3-2024
+                  bhc3 = u1*bhc + u2*bhc2                                                   !!>> HC 4-3-2024
+                  chc3 = u1*chc + u2*chc2                                                   !!>> HC 4-3-2024
+                  ord1=ord1+1                                                               !!>> HC 4-3-2024
+                  ncoords(ord1,1)= node(ihc)%x + ahc3                                       !!>> HC 4-3-2024
+                  ncoords(ord1,2)= node(ihc)%y + bhc3                                       !!>> HC 4-3-2024
+                  ncoords(ord1,3)= node(ihc)%z + chc3                                       !!>> HC 4-3-2024
+               enddo                                                                         !!>> HC 4-3-2024
+         enddo                                                                               !!>> HC 4-3-2024
+      enddo                                                                                  !!>> HC 4-3-2024
+   enddo                                                                                     !!>> HC 4-3-2024
+   
+   do ihc=1,nd                                                                               !!>> HC 4-3-2024 CALCULATE THE BIGGEST COORDINATE IN THE MORPH
+      if(abs(node(ihc)%x)>maxx) maxx=abs(node(ihc)%x)                                        !!>> HC 4-3-2024
+      if(abs(node(ihc)%y)>maxy) maxy=abs(node(ihc)%y)                                        !!>> HC 4-3-2024
+      if(abs(node(ihc)%z)>maxz) maxz=abs(node(ihc)%z)                                        !!>> HC 4-3-2024
+   enddo                                                                                     !!>> HC 4-3-2024
+   
+   totmax=maxx                                                                               !!>> HC 4-3-2024
+   if (maxy>totmax) totmax=maxy                                                              !!>> HC 4-3-2024
+   if (maxz>totmax) totmax=maxz                                                              !!>> HC 4-3-2024 The biggest coordinate
+   
+   maxadd=nodeo(1)%add*2                                                                     !!>> HC 4-3-2024
+   urv=1/maxadd                                                                              !!>> HC 4-3-2024
+   nboxes=(urv*totmax) +2                                                                    !!>> HC 4-3-2024  THE NUMBER OF BOXES
+   
+   if(allocated(bfillz))deallocate(bfillz)                                                   !!>> HC 4-3-2024 THIS ARRAY STORES THE BOXES
+   allocate(bfillz(-nboxes:nboxes,-nboxes:nboxes,-nboxes:nboxes))                            !!>> HC 4-3-2024
+   bfillz=0                                                                                  !!>> HC 4-3-2024
+   
+   do ihc=1,ord1                                                                             !!>> HC 4-3-2024 INTRODUCE THE COORDINATES IN THEIR CORRESPONDING BOXES
+      jhc=nint(ncoords(ihc,1)*urv)                                                           !!>> HC 4-3-2024 
+      khc=nint(ncoords(ihc,2)*urv)                                                           !!>> HC 4-3-2024
+      nhc=nint(ncoords(ihc,3)*urv)                                                           !!>> HC 4-3-2024
+      bfillz(jhc,khc,nhc)=1                                                                  !!>> HC 4-3-2024
+   enddo                                                                                     !!>> HC 4-3-2024
+   
+   bfillz(nboxes,nboxes,nboxes)=2                                                            !!>> HC 4-3-2024 THE FILLING ALGORITHM
+   changes=11; ord1=0                                                                        !!>> HC 4-3-2024 Fills with either 2 or 3 the boxes OUTSIDE the morphology
+   do while(changes>0)                                                                       !!>> HC 4-3-2024 2-3= OUT
+      changes=0                                                                              !!>> HC 4-3-2024 0= IN
+      do ihc=-nboxes,nboxes                                                                  !!>> HC 4-3-2024 1= SURFACE
+         do jhc=-nboxes,nboxes                                                               !!>> HC 4-3-2024
+            do khc=-nboxes,nboxes                                                            !!>> HC 4-3-2024
+               if( bfillz(ihc,jhc,khc).ne.2)cycle                                            !!>> HC 4-3-2024
+               do nhc=-1,1                                                                   !!>> HC 4-3-2024
+                  ord1=ihc+nhc                                                               !!>> HC 4-3-2024
+                  if(ord1>nboxes.or.ord1<(-nboxes))cycle                                     !!>> HC 4-3-2024
+                  if(bfillz(ord1,jhc,khc).ne.0)cycle                                         !!>> HC 4-3-2024
+                  bfillz(ord1,jhc,khc)=2                                                     !!>> HC 4-3-2024
+                  changes=changes+1                                                          !!>> HC 4-3-2024
+               enddo                                                                         !!>> HC 4-3-2024
+               do nhc=-1,1                                                                   !!>> HC 4-3-2024
+                  ord1=jhc+nhc                                                               !!>> HC 4-3-2024
+                  if(ord1>nboxes.or.ord1<(-nboxes))cycle                                     !!>> HC 4-3-2024
+                  if(bfillz(ihc,ord1,khc).ne.0)cycle                                         !!>> HC 4-3-2024
+                  bfillz(ihc,ord1,khc)=2                                                     !!>> HC 4-3-2024
+                  changes=changes+1                                                          !!>> HC 4-3-2024
+               enddo                                                                         !!>> HC 4-3-2024
+               do nhc=-1,1                                                                   !!>> HC 4-3-2024
+                  ord1=khc+nhc                                                               !!>> HC 4-3-2024
+                  if(ord1>nboxes.or.ord1<(-nboxes))cycle                                     !!>> HC 4-3-2024
+                  if(bfillz(ihc,jhc,ord1).ne.0)cycle                                         !!>> HC 4-3-2024
+                  bfillz(ihc,jhc,ord1)=2                                                     !!>> HC 4-3-2024
+                  changes=changes+1                                                          !!>> HC 4-3-2024
+               enddo                                                                         !!>> HC 4-3-2024
+               bfillz(ihc,jhc,khc)=3                                                         !!>> HC 4-3-2024
+            enddo                                                                            !!>> HC 4-3-2024
+         enddo                                                                               !!>> HC 4-3-2024
+      enddo                                                                                  !!>> HC 4-3-2024
+   enddo                                                                                     !!>> HC 4-3-2024
+   
+   surface=0; volume=0; outside=0; total=0                                                   !!>> HC 4-3-2024  Counting outside and inside boxes
+   do ihc=-nboxes,nboxes                                                                     !!>> HC 4-3-2024
+      do jhc=-nboxes,nboxes                                                                  !!>> HC 4-3-2024
+         do khc=-nboxes,nboxes                                                               !!>> HC 4-3-2024
+            if (bfillz(ihc,jhc,khc)==1)then                                                  !!>> HC 4-3-2024
+               surface=surface+1                                                             !!>> HC 4-3-2024
+            elseif(bfillz(ihc,jhc,khc)==0)then                                               !!>> HC 4-3-2024
+               volume=volume+1                                                               !!>> HC 4-3-2024
+            else                                                                             !!>> HC 4-3-2024
+               outside=outside+1                                                             !!>> HC 4-3-2024
+            endif                                                                            !!>> HC 4-3-2024
+         enddo                                                                               !!>> HC 4-3-2024
+      enddo                                                                                  !!>> HC 4-3-2024
+   enddo                                                                                     !!>> HC 4-3-2024
+   
+   if (volume>0)then                                                                         !!>> HC 4-3-2024 If the morphology is not broken
+      total=surface+volume                                                                   !!>> HC 4-3-2024 CALCULATE THE ASYMMETRY BY SHARED VOLUME
+      do ihc=-nboxes,nboxes                                                                  !!>> HC 4-3-2024
+         do jhc=-nboxes,nboxes                                                               !!>> HC 4-3-2024
+            do khc=-nboxes,nboxes                                                            !!>> HC 4-3-2024 Transform all the boxes into 1=IN 0=out
+               if ( bfillz(ihc,jhc,khc).le.1)then                                            !!>> HC 4-3-2024
+                  bfillz(ihc,jhc,khc)=1                                                      !!>> HC 4-3-2024
+               else                                                                          !!>> HC 4-3-2024
+                  bfillz(ihc,jhc,khc)=0                                                      !!>> HC 4-3-2024
+               endif                                                                         !!>> HC 4-3-2024
+            enddo                                                                            !!>> HC 4-3-2024
+         enddo                                                                               !!>> HC 4-3-2024
+      enddo                                                                                  !!>> HC 4-3-2024
+   
+      centrow=0                                                                              !!>> HC 4-3-2024 NON-SHARED VOLUME
+      do ihc=-nboxes,nboxes                                                                  !!>> HC 4-3-2024
+         do jhc=-nboxes,nboxes                                                               !!>> HC 4-3-2024 !!>> AL 23-1-25: important, this is wrong bc it assumes symmetry plane in XZ instead of YZ
+         if ( bfillz(ihc,0,jhc)==0)cycle                                                     !!>> HC 4-3-2024
+         centrow=centrow+1                                                                   !!>> HC 4-3-2024
+         enddo                                                                               !!>> HC 4-3-2024
+      enddo                                                                                  !!>> HC 4-3-2024
+   
+      differ=0                                                                               !!>> HC 4-3-2024
+      do ihc=1,nboxes                                                                        !!>> HC 4-3-2024
+         jhc=-ihc                                                                            !!>> HC 4-3-2024
+         do khc=-nboxes,nboxes                                                               !!>> HC 4-3-2024
+            do nhc=-nboxes,nboxes                                                            !!>> HC 4-3-2024
+               if( bfillz(ihc,khc,nhc) == bfillz(jhc,khc,nhc))cycle                          !!>> HC 4-3-2024
+               differ=differ+1                                                               !!>> HC 4-3-2024
+            enddo                                                                            !!>> HC 4-3-2024
+         enddo                                                                               !!>> HC 4-3-2024
+      enddo                                                                                  !!>> HC 4-3-2024
+      symch=real(differ)/real(total-centrow)                                                 !!>> HC 4-3-2024
+   else                                                                                      !!>> HC 4-3-2024 if the morphology is broken we will discard it
+      symch=666.0d0                                                                          !!>> HC 4-3-2024
+   endif                                                                                     !!>> HC 4-3-2024
+
+   ! inquire(file="assy_devtime.txt", exist=existes)                                         !!>> AL 17-7-2024
+   ! if(existes)then
+   !    open(6021, file="assy_devtime.txt", action='write',position='append')
+   !       write(6021, *) symch
+   !    close(6021)
+   ! else
+   !    open(6021, file="assy_devtime.txt", action="write")
+   !       write(6021, *) symch
+   !    close(6021)
+   ! end if  
+
+   if (symch<0.0500d0) then                                                                  !!>> HC 20-12-2020 We only want robust individuals
+      dieornot=0                                                                            !!>> HC 20-12-2020 The threshold comes my observations
+   else                                                                                      !!>> HC 20-12-2020  
+      dieornot=1                                                                            !!>> HC 20-12-2020 Avoid extintion
+   endif                                                                                     !!>> HC 20-12-2020
+   
+ end subroutine assymetry_save
+
+ subroutine epitelial_hole(volume)
+    integer, intent(out)    :: volume
+    integer                 :: ihc,jhc,khc,surface,outside,total,differ,shared,ord1,changes,nhc,ijk,puntos_fill,coco,iter,cb
+    integer                 :: neich,neichi,newdots,phc,size_box,ca
+    real*8                  :: ahc,bhc,chc,ahc2,bhc2,chc2,ahc3,bhc3,chc3,maxx,minx,maxy,miny,maxz,maxadd,totmax,crompio,&
+    conta_n_nodos
+    real*8                  :: u1,u2,pershared,per
+    real, allocatable, dimension(:,:)      :: ncoords
+    integer, allocatable, dimension(:,:,:) :: bfillz
+    !******************************************************************************************************!
+    size_box        = 1
+    puntos_fill     = 100
+
+    call neighbor_build
+
+    !! 1. Calcular el n de puntos que vamos a usar
+    newdots = 0
+    do ihc=1,nd
+      if(node(ihc)%tipus.ne.1)cycle
+      newdots=newdots+1
+      do jhc=1,nneigh(ihc) !AL> this tells you how many neighbours ihc has.
+          neich=neigh(ihc,jhc) !AL> this tells you the node number of neighbours
+          if(node(neich)%tipus.ne.1)cycle
+          do khc=1,nneigh(neich)
+                neichi=neigh(neich,khc)
+                if(node(neichi)%tipus.ne.1)cycle
+                if(neichi==ihc)cycle
+                  newdots=newdots+puntos_fill
+          enddo
+      enddo
+    enddo
+
+    pershared = 0
+
+    !! ncoords guarda los puntos que vamos a usar para describir la morph
+    if(allocated(ncoords))deallocate(ncoords)
+    allocate(ncoords(1:newdots,1:3)) 
+    ncoords=0.0d0
+
+    !! 2. coordenadas de los nodos de la morphología
+    ord1=0
+    do ihc=1,nd
+        if(node(ihc)%tipus.ne.1)cycle
+        ord1=ord1+1
+        ncoords(ord1,1) = node(ihc)%x 
+        ncoords(ord1,2) = node(ihc)%y
+        ncoords(ord1,3) = node(ihc)%z 
+    end do
+    
+    !! 3. Puntos extra entre las células de la morphología
+    do ihc=1,nd
+        if(node(ihc)%tipus.ne.1)cycle
+        do jhc=1,nneigh(ihc)
+              neich=neigh(ihc,jhc)
+              if(node(neich)%tipus.ne.1)cycle
+              do khc=1,nneigh(neich)
+                neichi=neigh(neich,khc)
+                if(node(neichi)%tipus.ne.1)cycle
+                if(neichi==ihc)cycle
+                do phc=1,puntos_fill
+                    ahc = node(neich)%x - node(ihc)%x
+                    bhc = node(neich)%y - node(ihc)%y
+                    chc = (node(neich)%z) - (node(ihc)%z)
+                    
+                    ahc2 = node(neichi)%x - node(ihc)%x
+                    bhc2 = node(neichi)%y - node(ihc)%y
+                    chc2 = (node(neichi)%z) - (node(ihc)%z)
+                    
+                    call random_number(u1); call random_number(u2); !random real between 0 <= 1
+                    if ( (u1+u2) > 1.0d0)then
+                          u1=1-u1
+                          u2=1-u2
+                    endif
+                    
+                    ahc3 = u1*ahc + u2*ahc2
+                    bhc3 = u1*bhc + u2*bhc2
+                    chc3 = u1*chc + u2*chc2
+                    ord1=ord1+1
+                    ncoords(ord1,1)= node(ihc)%x + ahc3
+                    ncoords(ord1,2)= node(ihc)%y + bhc3
+                    ncoords(ord1,3)= (node(ihc)%z) + chc3 
+                enddo      
+              enddo
+        enddo 
+    enddo
+
+    !! 4. Calcular el tamaño de las cajas
+    maxx=0.0d0 
+    maxy=0.0d0 
+    maxz=0.0d0
+    do ihc=1,nd
+        if(abs(node(ihc)%x)>maxx) maxx=abs(node(ihc)%x)
+        if(abs(node(ihc)%y)>maxy) maxy=abs(node(ihc)%y)
+        if(abs(node(ihc)%z)>maxz) maxz=abs(node(ihc)%z)
+    enddo
+
+    totmax=0.0d0
+    totmax=maxx
+    if (maxy>totmax) totmax=maxy
+    if (maxz>totmax) totmax=maxz
+
+    maxadd=0.0d0
+    maxadd=nodeo(1)%add*size_box    !! TAMAÑO DE LAS CAJAS !!ESTO ES INDEPENDIENTE DE LA MORFO YA QUE nodeo%add NO CAMBIA
+    urv=1/maxadd                    !! COEFICIENTE DE NORMALIZACIÓN PARA PASAR DE COORDENADAS DE NODO A ÍNDICE DE CAJA
+    nboxes=(urv*totmax) + 2         !! NUMERO DE CAJAS !!AL>> Notar el +2. los extremos de bfillz (i.e.bfillz(+/-nboxes,+/-nboxes,+/-nboxes)) no tienen morfo adentro 
+
+    !! bfillz es la matriz con todas las cajas
+    if(allocated(bfillz))deallocate(bfillz)
+    allocate(bfillz(-nboxes:nboxes,-nboxes:nboxes,-nboxes:nboxes)) 
+    bfillz=0
+  
+    !! Llenamos bfillz con las coordenadas de los puntos 
+    !0 = dentro morfo !1 = epitelio !3 = fuera epitelio !NOTA:Inicialmente toda caja que no es epitelio = 0
+    do ihc=1,ord1
+        jhc=nint(ncoords(ihc,1)*urv)
+        khc=nint(ncoords(ihc,2)*urv)
+        nhc=nint(ncoords(ihc,3)*urv)
+        bfillz(jhc,khc,nhc) = 1
+    end do
+
+    changes  = 11
+    ord1     = 0
+    !!5. RELLENAMOS EL EXTERIOR DE LA MORPHOLOGÍA FOREST FIRE
+    bfillz(nboxes,nboxes,nboxes) = 2
+    do while(changes>0) 
+        changes=0
+        do ihc=-nboxes,nboxes
+              do jhc=-nboxes,nboxes
+                do khc=-nboxes,nboxes
+                    if(bfillz(ihc,jhc,khc).ne.2)cycle
+                    do nhc=-1,1
+                          ord1=ihc+nhc
+                          if(ord1>nboxes .or. ord1<(-nboxes))cycle
+                          if(bfillz(ord1,jhc,khc) .ne. 0)cycle
+                          bfillz(ord1,jhc,khc)=2
+                          changes=changes+1
+                    enddo
+                    do nhc=-1,1
+                          ord1=jhc+nhc
+                          if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                          if(bfillz(ihc,ord1,khc).ne.0)cycle
+                          bfillz(ihc,ord1,khc)=2
+                          changes=changes+1
+                    enddo
+                    do nhc=-1,1
+                          ord1=khc+nhc
+                          if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                          if(bfillz(ihc,jhc,ord1).ne.0)cycle
+                          bfillz(ihc,jhc,ord1)=2
+                          changes=changes+1
+                    enddo
+                    bfillz(ihc,jhc,khc)=3
+                enddo
+              enddo
+        enddo
+    enddo
+
+    !! CONTAMOS EL NÚMERO DE CAJAS
+    !! surface= cubiertas por puntos (células)
+    !! outside= fuera de la morphología
+    !! volume = dentro de la morphología
+    surface=0; volume=0; outside=0; total=0
+    do ihc=-nboxes,nboxes
+        do jhc=-nboxes,nboxes
+              do khc=-nboxes,nboxes
+                if (bfillz(ihc,jhc,khc)==1)then
+                surface=surface+1
+                elseif(bfillz(ihc,jhc,khc)==0)then
+                volume=volume+1
+                else
+                outside=outside+1
+                endif
+              enddo
+        enddo
+    enddo
+
+  end subroutine epitelial_hole
+
+!!We assume the individual to compare to has already been read and stored. 
+subroutine shared_volume_two_morphs(SV, morph1, morph2) !whether to use centering, storage var, the file with the individual to compare, target individual file (optional)
+   integer, intent(out) :: SV
+   integer :: epi_nd, epind, ndp, center,ihc,jhc,zhc,nboxes1,nboxes2,nbocces,differ,volumebiggest
+   integer :: volume1, volume2        
+   real*8               :: centroidx, centroidy, centroidz, req1, tarreq,a,b,c, storenorm, suma,CS
+   character*1000       :: morph1, morph2
+   integer, allocatable, dimension(:,:,:) :: morph1_in_boxes, morph2_in_boxes
+
+   call morph2boxes(trim(morph1),morph1_in_boxes,nboxes1,volume1)
+
+   print*,nboxes1
+   print*,"volume1:",volume1
+   !print*,morph_in_boxes(1:10,1:10,1:10)
+
+   call morph2boxes(trim(morph2),morph2_in_boxes,nboxes2,volume2)
+   print*,nboxes2
+   print*,"volume1:",volume2
+   
+   if(nboxes1 .ge. nboxes2)then
+      nbocces = nboxes1
+   else
+      nbocces = nboxes2
+   end if 
+   !we always normalize the share volume with respecto to size of biggest morphology. 
+
+   ! !1=IN 0=out
+   ! do ihc=-nbocces,nbocces                                                                  
+   !    do jhc=-nbocces,nbocces    
+   !       do zhc=-nbocces,nbocces                                                             
+   !          if()
+   !       end do                                                              
+   !    end do                                                                               
+   ! end do                                                                                  
+  
+   ! differ=0                                                                               !!>> HC 4-3-2024
+   !   do ihc=1,nboxes                                                                        !!>> HC 4-3-2024
+   !      jhc=-ihc                                                                            !!>> HC 4-3-2024
+   !      do khc=-nboxes,nboxes                                                               !!>> HC 4-3-2024
+   !         do nhc=-nboxes,nboxes                                                            !!>> HC 4-3-2024
+   !            if( bfillz(ihc,khc,nhc) == bfillz(jhc,khc,nhc))cycle                          !!>> HC 4-3-2024
+   !            differ=differ+1                                                               !!>> HC 4-3-2024
+   !         enddo                                                                            !!>> HC 4-3-2024
+   !      enddo                                                                               !!>> HC 4-3-2024
+   !   enddo                                                                                  !!>> HC 4-3-2024
+   !   symch=real(differ)/real(total-centrow)                                                 !!>> HC 4-3-2024
+   ! ! center = 1
+   ! print *, "starting comparison..."
+   ! call read_targetind_normCS(morph1)   !!>>AL 14-5-25: center=1 means we center morphology around 0
+
+   ! !!! Read the individual to be compared to the target
+   ! print*,"reading second morph"
+   ! call iniread
+   ! call readsnap(morph2)
+   
+   ! epi_nd=0
+   ! do i=1,nd
+   !    if(node(i)%tipus>2)cycle  
+   !    epi_nd=epi_nd+1
+   ! end do
+
+   ! !now we transfer the coordinates of one individual to matrix compind
+   ! if (allocated(compind)) deallocate(compind)
+   ! allocate(compind(epi_nd,4))
+      
+   ! epind=0
+            
+   ! do i=1,nd
+   !    if(node(i)%tipus>2)cycle  
+   !    epind=epind+1
+   !    compind(epind,1)=node(i)%x
+   !    compind(epind,2)=node(i)%y
+   !    compind(epind,3)=node(i)%z
+   !    compind(epind,4)=node(i)%eqd 
+   ! end do
+      
+   ! centroidx=sum(compind(:,1))/epind     !centroid
+   ! centroidy=sum(compind(:,2))/epind
+   ! centroidz=sum(compind(:,3))/epind 
+
+   ! do i=1,epind
+   !    compind(i,1)=compind(i,1)-centroidx   !centering 
+   !    compind(i,2)=compind(i,2)-centroidy
+   !    compind(i,3)=compind(i,3)-centroidz
+   ! end do
+
+   ! !calculate centroid size 
+   ! suma = 0
+   ! do i=1,epind
+   !    suma = suma + sum(compind(i,:)**2)
+   ! end do
+
+   ! CS = sqrt(suma)
+   ! compind = compind/CS
+
+   ! call morph2boxes()
+   ! call morph2boxes()
+
+
+
+   ! EMDval=d/real(epi_nd+tar_epind)
+   ! !print*,'EMDval',EMDval
+   ! !if (center) d2=d/centroid_size
+   ! print *, "I find a val of ", EMDval
+
+end subroutine shared_volume_two_morphs  
+
+subroutine morph2boxes(morph,morph_in_boxes,nboxess,total)
+    integer                 :: ihc,jhc,khc,surface,outside,differ,shared,ord1,changes,nhc,ijk,puntos_fill,coco,iter,cb
+    integer                 :: neich,neichi,newdots,phc,size_box,ca,volume
+    real*8                  :: ahc,bhc,chc,ahc2,bhc2,chc2,ahc3,bhc3,chc3,maxx,minx,maxy,miny,maxz,maxadd,totmax,crompio,&
+    conta_n_nodos
+    character*1000          :: morph
+    real*8                  :: u1,u2,pershared,per
+    real, allocatable, dimension(:,:)      :: ncoords
+    integer, allocatable, dimension(:,:,:) :: bfillz
+    integer, intent(out)   :: nboxess,total
+    integer, allocatable, dimension(:,:,:), intent(out)  :: morph_in_boxes
+    
+    real*8 :: centroidx,centroidy,centroidz,CS,suma
+    
+    !******************************************************************************************************!
+    
+    call iniread
+    call readsnap(trim(morph))
+    call iniboxes
+    call neighbor_build
+
+   print*,"inside box convert"
+   centroidx=sum(node(:)%x)/nd     !centroid
+   centroidy=sum(node(:)%y)/nd
+   centroidz=sum(node(:)%z)/nd 
+
+   do i=1,nd
+      node(:)%x=node(:)%x-centroidx   !centering 
+      node(:)%y=node(:)%y-centroidy
+      node(:)%z=node(:)%z-centroidz
+   end do
+
+   !calculate centroid size 
+   suma = 0
+   do i=1,nd
+      suma = suma + sum(node(:)%x**2+node(:)%y**2+node(:)%z**2)
+   end do
+
+   print*,"pre norm:",node(1)%x,node(1)%y,node(1)%z
+
+   CS = sqrt(suma)
+   print*,"CS",CS
+   node(:)%x = node(:)%x/CS
+   node(:)%y = node(:)%y/CS
+   node(:)%z = node(:)%z/CS
+
+   print*,"normalization works:",node(1)%x,node(1)%y,node(1)%z
+
+    size_box        = 1
+    puntos_fill     = 100
+
+    !! 1. Calcular el n de puntos que vamos a usar
+    newdots = 0
+    do ihc=1,nd
+      if(node(ihc)%tipus.ne.1)cycle
+      newdots=newdots+1
+      do jhc=1,nneigh(ihc) !AL> this tells you how many neighbours ihc has.
+          neich=neigh(ihc,jhc) !AL> this tells you the node number of neighbours
+          if(node(neich)%tipus.ne.1)cycle
+          do khc=1,nneigh(neich)
+                neichi=neigh(neich,khc)
+                if(node(neichi)%tipus.ne.1)cycle
+                if(neichi==ihc)cycle
+                newdots=newdots+puntos_fill
+          enddo
+      enddo
+    enddo
+
+    pershared = 0
+
+    !! ncoords guarda los puntos que vamos a usar para describir la morph
+    if(allocated(ncoords))deallocate(ncoords)
+    allocate(ncoords(1:newdots,1:3)) 
+    ncoords=0.0d0
+
+    !! 2. coordenadas de los nodos de la morphología
+    ord1=0
+    do ihc=1,nd
+        if(node(ihc)%tipus.ne.1)cycle
+        ord1=ord1+1
+        ncoords(ord1,1) = node(ihc)%x 
+        ncoords(ord1,2) = node(ihc)%y
+        ncoords(ord1,3) = node(ihc)%z 
+    end do
+    
+    !! 3. Puntos extra entre las células de la morphología
+    do ihc=1,nd
+        if(node(ihc)%tipus.ne.1)cycle
+        do jhc=1,nneigh(ihc)
+              neich=neigh(ihc,jhc)
+              if(node(neich)%tipus.ne.1)cycle
+              do khc=1,nneigh(neich)
+                neichi=neigh(neich,khc)
+                if(node(neichi)%tipus.ne.1)cycle
+                if(neichi==ihc)cycle
+                do phc=1,puntos_fill
+                    ahc = node(neich)%x - node(ihc)%x
+                    bhc = node(neich)%y - node(ihc)%y
+                    chc = (node(neich)%z) - (node(ihc)%z)
+                    
+                    ahc2 = node(neichi)%x - node(ihc)%x
+                    bhc2 = node(neichi)%y - node(ihc)%y
+                    chc2 = (node(neichi)%z) - (node(ihc)%z)
+                    
+                    call random_number(u1); call random_number(u2); !random real between 0 <= 1
+                    if ( (u1+u2) > 1.0d0)then
+                          u1=1-u1
+                          u2=1-u2
+                    endif
+                    
+                    ahc3 = u1*ahc + u2*ahc2
+                    bhc3 = u1*bhc + u2*bhc2
+                    chc3 = u1*chc + u2*chc2
+                    ord1=ord1+1
+                    ncoords(ord1,1)= node(ihc)%x + ahc3
+                    ncoords(ord1,2)= node(ihc)%y + bhc3
+                    ncoords(ord1,3)= (node(ihc)%z) + chc3 
+                enddo      
+              enddo
+        enddo 
+    enddo
+
+    !! 4. Calcular el tamaño de las cajas
+    maxx=0.0d0 
+    maxy=0.0d0 
+    maxz=0.0d0
+    do ihc=1,nd
+        if(abs(node(ihc)%x)>maxx) maxx=abs(node(ihc)%x)
+        if(abs(node(ihc)%y)>maxy) maxy=abs(node(ihc)%y)
+        if(abs(node(ihc)%z)>maxz) maxz=abs(node(ihc)%z)
+    enddo
+
+    totmax=0.0d0
+    totmax=maxx
+    if (maxy>totmax) totmax=maxy
+    if (maxz>totmax) totmax=maxz
+
+    maxadd=0.0d0
+    
+    maxadd=nodeo(1)%add*size_box    !! TAMAÑO DE LAS CAJAS !!ESTO ES INDEPENDIENTE DE LA MORFO YA QUE nodeo%add NO CAMBIA
+    maxadd = maxadd/CS
+    print*,"maxadd",maxadd
+    print*,"totmax",totmax
+
+    urv=1/maxadd                    !! COEFICIENTE DE NORMALIZACIÓN PARA PASAR DE COORDENADAS DE NODO A ÍNDICE DE CAJA
+    nboxess=(urv*totmax) + 2         !! NUMERO DE CAJAS !!AL>> Notar el +2. los extremos de bfillz (i.e.bfillz(+/-nboxess,+/-nboxess,+/-nboxess)) no tienen morfo adentro 
+    print*,"nboxess",nboxess
+
+    !! bfillz es la matriz con todas las cajas
+    if(allocated(bfillz))deallocate(bfillz)
+    allocate(bfillz(-nboxess:nboxess,-nboxess:nboxess,-nboxess:nboxess)) 
+    bfillz=0
+  
+   !! bfillz es la matriz con todas las cajas
+    if(allocated(morph_in_boxes))deallocate(morph_in_boxes)
+    allocate(morph_in_boxes(-nboxess:nboxess,-nboxess:nboxess,-nboxess:nboxess)) 
+    morph_in_boxes=0
+
+    !! Llenamos bfillz con las coordenadas de los puntos 
+    !0 = dentro morfo !1 = epitelio !3 = fuera epitelio !NOTA:Inicialmente toda caja que no es epitelio = 0
+    do ihc=1,ord1
+        jhc=nint(ncoords(ihc,1)*urv)
+        khc=nint(ncoords(ihc,2)*urv)
+        nhc=nint(ncoords(ihc,3)*urv)
+        bfillz(jhc,khc,nhc) = 1
+    end do
+
+    changes  = 11
+    ord1     = 0
+    !!5. RELLENAMOS EL EXTERIOR DE LA MORPHOLOGÍA FOREST FIRE
+    bfillz(nboxess,nboxess,nboxess) = 2
+    do while(changes>0) 
+        changes=0
+        do ihc=-nboxess,nboxess
+              do jhc=-nboxess,nboxess
+                do khc=-nboxess,nboxess
+                    if(bfillz(ihc,jhc,khc).ne.2)cycle
+                    do nhc=-1,1
+                          ord1=ihc+nhc
+                          if(ord1>nboxess .or. ord1<(-nboxess))cycle
+                          if(bfillz(ord1,jhc,khc) .ne. 0)cycle
+                          bfillz(ord1,jhc,khc)=2
+                          changes=changes+1
+                    enddo
+                    do nhc=-1,1
+                          ord1=jhc+nhc
+                          if(ord1>nboxess.or.ord1<(-nboxess))cycle
+                          if(bfillz(ihc,ord1,khc).ne.0)cycle
+                          bfillz(ihc,ord1,khc)=2
+                          changes=changes+1
+                    enddo
+                    do nhc=-1,1
+                          ord1=khc+nhc
+                          if(ord1>nboxess.or.ord1<(-nboxess))cycle
+                          if(bfillz(ihc,jhc,ord1).ne.0)cycle
+                          bfillz(ihc,jhc,ord1)=2
+                          changes=changes+1
+                    enddo
+                    bfillz(ihc,jhc,khc)=3
+                enddo
+              enddo
+        enddo
+    enddo
+
+   !! CONTAMOS EL NÚMERO DE CAJAS
+   !! surface= cubiertas por puntos (células)
+   !! outside= fuera de la morphología
+   !! volume = dentro de la morphología
+   surface=0; volume=0; outside=0; total=0
+   do ihc=-nboxess,nboxess
+      do jhc=-nboxess,nboxess
+         do khc=-nboxess,nboxess
+            if (bfillz(ihc,jhc,khc)==1)then
+            surface=surface+1
+            elseif(bfillz(ihc,jhc,khc)==0)then
+            volume=volume+1
+            else
+            outside=outside+1
+            endif
+         enddo
+      enddo
+   enddo
+
+   total=surface+volume                                                                   !!>> HC 4-3-2024 CALCULATE THE ASYMMETRY BY SHARED VOLUME
+   do ihc=-nboxes,nboxes                                                                  !!>> HC 4-3-2024
+      do jhc=-nboxes,nboxes                                                               !!>> HC 4-3-2024
+         do khc=-nboxes,nboxes                                                            !!>> HC 4-3-2024 Transform all the boxes into 1=IN 0=out
+            if ( bfillz(ihc,jhc,khc).le.1)then                                            !!>> HC 4-3-2024
+               bfillz(ihc,jhc,khc)=1                                                      !!>> HC 4-3-2024
+            else                                                                          !!>> HC 4-3-2024
+               bfillz(ihc,jhc,khc)=0                                                      !!>> HC 4-3-2024
+            endif                                                                         !!>> HC 4-3-2024
+         end do                                                                            !!>> HC 4-3-2024
+      end do                                                                               !!>> HC 4-3-2024
+   end do 
+
+   morph_in_boxes = bfillz
+
+end subroutine morph2boxes
+
+!!We assume the individual to compare to has already been read and stored. 
+subroutine EMD_twomorphs(EMDval, morph1, morph2) !whether to use centering, storage var, the file with the individual to compare, target individual file (optional)
+   integer         :: epi_nd, epind, ndp, center
+   real*8          :: EMDval,centroidx, centroidy, centroidz, req1, tarreq,a,b,c, storenorm, suma,CS
+   character*140   :: morph1, morph2
+   
+   center = 1
+   print *, "starting comparison..."
+   call read_targetind_normCS(morph1)   !!>>AL 14-5-25: center=1 means we center morphology around 0
+
+   !!! Read the individual to be compared to the target
+   print*,"reading second morph"
+   call iniread
+   call readsnap(morph2)
+   
+   epi_nd=0
+   do i=1,nd
+      if(node(i)%tipus>2)cycle  
+      epi_nd=epi_nd+1
+   end do
+
+   !now we transfer the coordinates of one individual to matrix compind
+   if (allocated(compind)) deallocate(compind)
+   allocate(compind(epi_nd,4))
+      
+   epind=0
+
+   do i=1,nd
+      if(node(i)%tipus>2)cycle  
+      epind=epind+1
+      compind(epind,1)=node(i)%x
+      compind(epind,2)=node(i)%y
+      compind(epind,3)=node(i)%z
+      compind(epind,4)=node(i)%eqd 
+   end do
+      
+   centroidx=sum(compind(:,1))/epind     !centroid
+   centroidy=sum(compind(:,2))/epind
+   centroidz=sum(compind(:,3))/epind 
+
+   do i=1,epind
+      compind(i,1)=compind(i,1)-centroidx   !centering 
+      compind(i,2)=compind(i,2)-centroidy
+      compind(i,3)=compind(i,3)-centroidz
+   end do
+
+   !calculate centroid size 
+   suma = 0
+   do i=1,epind
+      suma = suma + sum(compind(i,:)**2)
+   end do
+
+   CS = sqrt(suma)
+   compind = compind/CS
+
+   !now EMD
+   d=0.0d0
+   do i=1,epi_nd
+         a=compind(i,1) ; b=compind(i,2) ; c=compind(i,3) ; req1=compind(i,4)
+         aa=1000000
+         do j=1,tar_epind
+            dd=sqrt((tarind(j,1)-a)**2+(tarind(j,2)-b)**2+(tarind(j,3)-c)**2)
+            if (dd<aa) then ; aa=dd ; storenorm=(tarind(j,4)+req1)/2 ; end if
+            !if (dd<aa) then ; aa=dd ; end if
+         end do           
+         d=d+aa/storenorm
+         !d=d+aa
+   end do
+   do i=1,tar_epind
+         a=tarind(i,1) ; b=tarind(i,2) ; c=tarind(i,3) ; tarreq=tarind(i,4)
+         aa=1000000
+         do j=1,epi_nd
+            dd=sqrt((compind(j,1)-a)**2+(compind(j,2)-b)**2+(compind(j,3)-c)**2)
+            if (dd<aa) then; aa=dd ; storenorm=(compind(j,4)+tarreq)/2 ; end if
+            !if (dd<aa) then; aa=dd ;end if
+         end do          
+         d=d+aa/storenorm
+         !d=d+aa
+   enddo
+   print*,'d ',d,aa,storenorm
+   EMDval=d/real(epi_nd+tar_epind)
+   !print*,'EMDval',EMDval
+   !if (center) d2=d/centroid_size
+   print *, "I find a val of ", EMDval
+
+end subroutine EMD_twomorphs  
+
 
 end module conservative_R

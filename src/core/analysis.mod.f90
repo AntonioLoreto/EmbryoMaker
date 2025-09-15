@@ -18,7 +18,6 @@
 ! Created by Renske 24-04-2018
 ! This module contains functions for analysing embryonic development. They could be called by auto in automaticon, 
 ! which would however require one to divide an elli run into subruns (otherwise there is not much to analyse)
-! 
 
 module analysis
 
@@ -26,14 +25,12 @@ module analysis
   use genetic
   use io
   use neighboring
+
   !parameters
   implicit none 
   real*8, allocatable :: storprev(:,:),stornow(:,:) !to generate a centered tissue
-    
   real*8, allocatable ::maxgex(:,:) !store max expression per gene (and the time of maximum
   integer ::epi_prev, epi_now
-  
-  
   integer :: nrnods !the previous nr of nodes
   integer :: grofile=942
   integer :: OPCdistfile=337
@@ -42,12 +39,8 @@ module analysis
   integer :: gefile2=864  !file handle
   integer :: gefile3=865 !file handle
   
-  
   !************************************
-
-  
-  contains
-  
+  contains  
   ! gathers the several subroutines in one handy bundle
   subroutine do_analysis(which)
     integer :: which
@@ -107,20 +100,13 @@ module analysis
       print *, "Error in analysis.mod: invalid option. Please use 1, 2 or 3. Exiting..."
       stop
     end if
-    
-
-    
   end subroutine 
   
   subroutine copy_nodes
-  
     if(allocated(storprev)) deallocate(storprev)
     allocate(storprev(epi_now,6))
-    
     storprev=stornow
-    
   end subroutine
-  
   
   !close the files that were written into, delete the used memory
   subroutine close_analysis(which)
@@ -1836,8 +1822,6 @@ maxadd=nodeo(1)%add*2
 urv=1/maxadd
 nboxes=(urv*totmax) +2
 
-
-
 if(allocated(bfillz))deallocate(bfillz)
 allocate(bfillz(-nboxes:nboxes,-nboxes:nboxes,-nboxes:nboxes))
 bfillz=0
@@ -1932,8 +1916,6 @@ enddo
 pershared=real(differ)/real(total-centrow)
 
 
-
-
 corners=0.0d0
 nhc=0; mhc=0
 do khc=-1,1
@@ -1959,7 +1941,6 @@ do ihc=1,nd
    if(abs(node(ihc)%y)>maxcoord) maxcoord=abs(node(ihc)%y)
    if(abs(node(ihc)%z)>maxcoord) maxcoord=abs(node(ihc)%z)
 enddo
-
 
 maxcoord=1/maxcoord
 do ihc=1,26
@@ -2004,5 +1985,1593 @@ end subroutine
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  !!>> HC 19-2-2024
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  !!>> HC 19-2-2024
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  !!>> HC 19-2-2024 
+
+subroutine complexity(fitelli, volumenes) !!>> AL 12-3-2024
+   integer                 :: ihc,jhc,khc,surface,volume,outside,total,differ,shared,ord1,changes,nhc,ijk,puntos_fill,coco,iter,cb
+   integer                 :: neich,neichi,newdots,cuantos,w_sect,compa_tot,secciones,phc,comparaciones,size_box,numrowspersect,ca
+   integer                 :: guardar,voll
+   real*8                  :: ahc,bhc,chc,ahc2,bhc2,chc2,ahc3,bhc3,chc3,maxx,minx,maxy,miny,maxz,maxadd,totmax,crompio,conta_n_nodos
+   real*8                  :: u1,u2,pershared,pershared_z,pershared_x,pershared_y,per,alfa,fitelli,cociente,crompiopokito
+   character*300           :: input,output
+   character*152           :: pathandfile, crear
+   character(len=3)        :: str1
+   character(len=80)       :: fichero
+   character(len=80)       :: NAME
+   logical                 :: exists
+   real, allocatable, dimension(:,:)      :: ncoords,cual_caja,orden_final_x,orden_final_y,orden_final_z
+   integer, allocatable, dimension(:,:,:) :: bfillz
+   integer, allocatable, dimension(:)     :: volumenes
+   !******************************************************************************************************!
+   size_box        = 1
+   numrowspersect  = 3     !Number of rows per section 
+   puntos_fill     = 100
+   iter            = 1
+   cociente        = 0
+!   call iniread
+!   call readsnap(pathandfile)
+!   call iniboxes
+   call neighbor_build
+   if(allocated(volumenes))deallocate(volumenes)
+   allocate(volumenes(3)) 
+   volumenes=0
+
+   !! 1. Calcular el n de puntos que vamos a usar
+   crompio = 1
+   crompiopokito = 1
+   newdots = 0
+   do ihc=1,nd
+      if(node(ihc)%tipus.ne.1)cycle
+      newdots=newdots+1
+      do jhc=1,nneigh(ihc) !AL> this tells you how many neighbours ihc has.
+         neich=neigh(ihc,jhc) !AL> this tells you the node number of neighbours
+         if(node(neich)%tipus.ne.1)cycle
+         do khc=1,nneigh(neich)
+               neichi=neigh(neich,khc)
+               if(node(neichi)%tipus.ne.1)cycle
+               if(neichi==ihc)cycle
+                  newdots=newdots+puntos_fill
+         enddo
+      enddo
+   enddo
+
+   !!!!!!!!!calculate complexity z axis with displacement!!!!!!!!!
+   alfa = 0
+   pershared = 0
+   do ijk = 1,iter
+      !! ncoords guarda los puntos que vamos a usar para describir la morph
+      if(allocated(ncoords))deallocate(ncoords)
+      allocate(ncoords(1:newdots,1:3)) 
+      ncoords=0.0d0
+
+      !! 2. coordenadas de los nodos de la morphología
+      ord1=0
+      do ihc=1,nd
+         if(node(ihc)%tipus.ne.1)cycle
+         ord1=ord1+1
+         ncoords(ord1,1) = (node(ihc)%x ) 
+         ncoords(ord1,2) = (node(ihc)%y)
+         ncoords(ord1,3) = (node(ihc)%z + alfa) !Desplazamiento en eje z
+      enddo
+      cuantos = ord1
+      !! 3. Puntos extra entre las células de la morphología
+      do ihc=1,nd
+         if(node(ihc)%tipus.ne.1)cycle
+         do jhc=1,nneigh(ihc)
+               neich=neigh(ihc,jhc)
+               if(node(neich)%tipus.ne.1)cycle
+               do khc=1,nneigh(neich)
+                  neichi=neigh(neich,khc)
+                  if(node(neichi)%tipus.ne.1)cycle
+                  if(neichi==ihc)cycle
+                  do phc=1,puntos_fill
+                     ahc = node(neich)%x - node(ihc)%x
+                     bhc = node(neich)%y - node(ihc)%y
+                     chc = (node(neich)%z + alfa) - (node(ihc)%z + alfa)
+                     
+                     ahc2 = node(neichi)%x - node(ihc)%x
+                     bhc2 = node(neichi)%y - node(ihc)%y
+                     chc2 = (node(neichi)%z + alfa) - (node(ihc)%z + alfa)
+                     
+                     call random_number(u1); call random_number(u2); !random real between 0 <= 1
+                     if ( (u1+u2) > 1.0d0)then
+                           u1=1-u1
+                           u2=1-u2
+                     endif
+                     
+                     ahc3 = u1*ahc + u2*ahc2
+                     bhc3 = u1*bhc + u2*bhc2
+                     chc3 = u1*chc + u2*chc2
+                     ord1=ord1+1
+                     ncoords(ord1,1)= node(ihc)%x + ahc3
+                     ncoords(ord1,2)= node(ihc)%y + bhc3
+                     ncoords(ord1,3)= (node(ihc)%z + alfa) + chc3 
+                  enddo      
+               enddo
+         enddo 
+      enddo
+      !! 4. Calcular el tamaño de las cajas
+      maxx=0.0d0 
+      maxy=0.0d0 
+      maxz=0.0d0
+      do ihc=1,nd
+         if(abs(node(ihc)%x)>maxx) maxx=abs(node(ihc)%x)
+         if(abs(node(ihc)%y)>maxy) maxy=abs(node(ihc)%y)
+         if(abs(node(ihc)%z + alfa)>maxz) maxz=abs(node(ihc)%z + alfa)
+      enddo
+
+      totmax=0.0d0
+      totmax=maxx
+      if (maxy>totmax) totmax=maxy
+      if (maxz>totmax) totmax=maxz
+
+      maxadd=0.0d0
+      maxadd=nodeo(1)%add*size_box    !! TAMAÑO DE LAS CAJAS !!ESTO ES INDEPENDIENTE DE LA MORFO YA QUE nodeo%add NO CAMBIA
+      urv=1/maxadd                    !! COEFICIENTE DE NORMALIZACIÓN PARA PASAR DE COORDENADAS DE NODO A ÍNDICE DE CAJA
+      nboxes=(urv*totmax) + 2         !! NUMERO DE CAJAS !!AL>> Notar el +2. los extremos de bfillz (i.e.bfillz(+/-nboxes,+/-nboxes,+/-nboxes)) no tienen morfo adentro 
+
+      !! bfillz es la matriz con todas las cajas
+      if(allocated(bfillz))deallocate(bfillz)
+      allocate(bfillz(-nboxes:nboxes,-nboxes:nboxes,-nboxes:nboxes)) 
+      bfillz=0
+   
+      !! Llenamos bfillz con las coordenadas de los puntos 
+      !0 = dentro morfo !1 = epitelio !3 = fuera epitelio !NOTA:Inicialmente toda caja que no es epitelio = 0
+      do ihc=1,ord1
+         jhc=nint(ncoords(ihc,1)*urv)
+         khc=nint(ncoords(ihc,2)*urv)
+         nhc=nint(ncoords(ihc,3)*urv)
+         bfillz(jhc,khc,nhc) = 1
+      end do
+
+      changes  = 11
+      ord1     = 0
+      !!5. RELLENAMOS EL EXTERIOR DE LA MORPHOLOGÍA FOREST FIRE
+      bfillz(nboxes,nboxes,nboxes) = 2
+      do while(changes>0) 
+         changes=0
+         do ihc=-nboxes,nboxes
+               do jhc=-nboxes,nboxes
+                  do khc=-nboxes,nboxes
+                     if(bfillz(ihc,jhc,khc).ne.2)cycle
+                     do nhc=-1,1
+                           ord1=ihc+nhc
+                           if(ord1>nboxes .or. ord1<(-nboxes))cycle
+                           if(bfillz(ord1,jhc,khc) .ne. 0)cycle
+                           bfillz(ord1,jhc,khc)=2
+                           changes=changes+1
+                     enddo
+                     do nhc=-1,1
+                           ord1=jhc+nhc
+                           if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                           if(bfillz(ihc,ord1,khc).ne.0)cycle
+                           bfillz(ihc,ord1,khc)=2
+                           changes=changes+1
+                     enddo
+                     do nhc=-1,1
+                           ord1=khc+nhc
+                           if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                           if(bfillz(ihc,jhc,ord1).ne.0)cycle
+                           bfillz(ihc,jhc,ord1)=2
+                           changes=changes+1
+                     enddo
+                     bfillz(ihc,jhc,khc)=3
+                  enddo
+               enddo
+         enddo
+      enddo
+
+      !! CONTAMOS EL NÚMERO DE CAJAS
+      !! surface= cubiertas por puntos (células)
+      !! outside= fuera de la morphología
+      !! volume = dentro de la morphología
+      surface=0; volume=0; outside=0; total=0
+      do ihc=-nboxes,nboxes
+         do jhc=-nboxes,nboxes
+               do khc=-nboxes,nboxes
+                  if (bfillz(ihc,jhc,khc)==1)then
+                  surface=surface+1
+                  elseif(bfillz(ihc,jhc,khc)==0)then
+                  volume=volume+1
+                  else
+                  outside=outside+1
+                  endif
+               enddo
+         enddo
+      enddo
+      total=surface+volume
+      volumenes(1) = volume
+      if(volume==0)then
+         crompio = 0
+      end if
+      cociente = surface/volume
+      if(cociente>1)then
+         crompiopokito = 0
+      endif
+
+      open (123, file="individual.volume.txt")
+         write(123,*) volume                 !!>>AL 4-4-24: If no displacement, volume(1)=volume(2)=volume(3)
+      close(123)
+      !! Lo pasamos a 0=fuera; 1=dentro
+      do ihc=-nboxes,nboxes
+         do jhc=-nboxes,nboxes
+               do khc=-nboxes,nboxes
+                  if (bfillz(ihc,jhc,khc).le.1)then
+                     bfillz(ihc,jhc,khc)=1
+                  else
+                     bfillz(ihc,jhc,khc)=0
+                  endif
+               enddo
+         enddo
+      enddo
+
+      !!Calculamos el volumen no compartido entre secciones en eje z !>>AL 17/01/24
+      per            = 0
+      compa_tot      = 0
+      differ         = 0
+      shared         = 0
+      pershared_z    = 0
+      comparaciones  = 0
+      secciones      = 0
+      do khc = (nboxes - 1), (-nboxes + 1 + numrowspersect), -numrowspersect !>>AL 17/01/24: top to bottom comparison
+         secciones = secciones + 1
+         do nhc = khc - numrowspersect, (-nboxes + 1), -numrowspersect
+               do phc = 0, (numrowspersect - 1) !AL 17/01/24:this moves you through rows in sections being compared
+                  if((nhc - phc) < (-nboxes+1))then; cycle; end if !AL 17/01/24:in case you are trying to compare a section with i rows against a section with j rows where i>j
+                  do ihc = (nboxes - 1), (-nboxes + 1), -1 
+                     do jhc = (nboxes - 1), (-nboxes + 1), -1
+                           if(bfillz(ihc,jhc,khc - phc) == 0 .and. bfillz(ihc,jhc,nhc - phc) == 0 ) cycle; !AL 17/01/24>> boxes of both sections are outside morphology
+                           if(bfillz(ihc,jhc,khc - phc) == 1 .and. bfillz(ihc,jhc,nhc - phc) == 1 ) then;
+                              shared = shared + 1
+                           else
+                              differ = differ + 1
+                           end if 
+                     end do
+                  end do
+                  if(shared == 0)then; differ = 0; end if; !AL 17/01/24:this is in case you compare an empty section with a nonempty one.
+               end do   
+               if(shared == 0 .and. differ == 0)cycle              !>>AL 17/01/24 both sections are empty
+                                                                  !!this can happen because the limits of the grid of boxes are determined
+                                                                  !!by variable totmax which only considers max coordinate in one component
+                                                                  !!so maybe in other component max coordinate is smaller so anything bigger is empty. also only one could be empty
+               per = (real(differ) / real(shared + differ)) + per  !>>AL 17/01/24 nonsharedvolume
+               comparaciones = comparaciones + 1                   
+               shared = 0
+               differ = 0
+         end do
+         if(comparaciones == 0)then;cycle; end if                !>>AL 17/01/24 this for the case in which all sections compared were empty (boundary sects)
+         pershared_z = per/real(comparaciones) + pershared_z
+         compa_tot = comparaciones + compa_tot
+         comparaciones = 0
+         per = 0
+      end do
+
+      pershared = pershared + pershared_z 
+      alfa = alfa + 0.064
+   end do
+   pershared = pershared/iter
+   pershared_z = pershared
+
+   alfa = 0
+   pershared = 0
+   do ijk = 1,iter
+      !! ncoords guarda los puntos que vamos a usar para describir la morph
+      if(allocated(ncoords))deallocate(ncoords)
+      allocate(ncoords(1:newdots,1:3)) 
+      ncoords=0.0d0
+      !! 2. coordenadas de los nodos de la morphología
+      ord1=0
+      do ihc=1,nd
+         if(node(ihc)%tipus.ne.1)cycle
+         ord1=ord1+1
+         ncoords(ord1,1) = (node(ihc)%x + alfa) !Desplazamiento en eje x
+         ncoords(ord1,2) = (node(ihc)%y)
+         ncoords(ord1,3) = (node(ihc)%z) 
+      enddo
+      cuantos = ord1
+      !! 3. Puntos extra entre las células de la morphología
+      do ihc=1,nd
+         if(node(ihc)%tipus.ne.1)cycle
+         do jhc=1,nneigh(ihc)
+               neich=neigh(ihc,jhc)
+               if(node(neich)%tipus.ne.1)cycle
+               do khc=1,nneigh(neich)
+                  neichi=neigh(neich,khc)
+                  if(node(neichi)%tipus.ne.1)cycle
+                  if(neichi==ihc)cycle
+                  do phc=1,puntos_fill
+                     ahc = (node(neich)%x + alfa) - (node(ihc)%x + alfa)
+                     bhc = node(neich)%y - node(ihc)%y
+                     chc = node(neich)%z - node(ihc)%z
+                     
+                     ahc2 = (node(neichi)%x + alfa) - (node(ihc)%x + alfa)
+                     bhc2 = node(neichi)%y - node(ihc)%y
+                     chc2 = node(neichi)%z - node(ihc)%z 
+                     
+                     call random_number(u1); call random_number(u2); !random real between 0 <= 1
+                     if ( (u1+u2) > 1.0d0)then
+                           u1=1-u1
+                           u2=1-u2
+                     endif
+                     
+                     ahc3 = u1*ahc + u2*ahc2
+                     bhc3 = u1*bhc + u2*bhc2
+                     chc3 = u1*chc + u2*chc2
+                     ord1=ord1+1
+                     ncoords(ord1,1)= (node(ihc)%x + alfa) + ahc3
+                     ncoords(ord1,2)= node(ihc)%y + bhc3
+                     ncoords(ord1,3)= node(ihc)%z + chc3 
+                  enddo      
+               enddo
+         enddo 
+      enddo
+
+      !! 4. Calcular el tamaño de las cajas
+      maxx=0.0d0 
+      maxy=0.0d0 
+      maxz=0.0d0
+      do ihc=1,nd
+         if(abs(node(ihc)%x + alfa)>maxx) maxx=abs(node(ihc)%x + alfa)
+         if(abs(node(ihc)%y)>maxy) maxy=abs(node(ihc)%y)
+         if(abs(node(ihc)%z)>maxz) maxz=abs(node(ihc)%z)
+      enddo
+
+      totmax=0.0d0
+      totmax=maxx
+      if (maxy>totmax) totmax=maxy
+      if (maxz>totmax) totmax=maxz
+
+      maxadd=0.0d0
+      maxadd=nodeo(1)%add*size_box  !! TAMAÑO DE LAS CAJAS !!ESTO ES INDEPENDIENTE DE LA MORFO YA QUE nodeo%add NO CAMBIA
+      urv=1/maxadd           !! COEFICIENTE DE NORMALIZACIÓN PARA PASAR DE COORDENADAS DE NODO A ÍNDICE DE CAJA
+      nboxes=(urv*totmax) +2 !! NUMERO DE CAJAS !!AL>> Notar el +2. los extremos de bfillz (i.e.bfillz(+/-nboxes,+/-nboxes,+/-nboxes)) no tienen morfo adentro 
+
+      !! bfillz es la matriz con todas las cajas
+      if(allocated(bfillz))deallocate(bfillz)
+      allocate(bfillz(-nboxes:nboxes,-nboxes:nboxes,-nboxes:nboxes)) 
+      bfillz=0
+      !! Llenamos bfillz con las coordenadas de los puntos
+      !0 = dentro morfo !1 = epitelio !3 = fuera epitelio
+      do ihc=1,ord1
+         jhc=nint(ncoords(ihc,1)*urv)
+         khc=nint(ncoords(ihc,2)*urv)
+         nhc=nint(ncoords(ihc,3)*urv)
+         bfillz(jhc,khc,nhc) = 1
+      end do
+
+      changes  = 11
+      ord1     = 0
+      !!5. RELLENAMOS EL EXTERIOR DE LA MORPHOLOGÍA COMO EN EL PAINT
+      bfillz(nboxes,nboxes,nboxes) = 2
+      do while(changes>0)     !esto sobra
+         changes=0
+         do ihc=-nboxes,nboxes
+               do jhc=-nboxes,nboxes
+                  do khc=-nboxes,nboxes
+                  if(bfillz(ihc,jhc,khc).ne.2)cycle
+                  do nhc=-1,1
+                     ord1=ihc+nhc
+                     if(ord1>nboxes .or. ord1<(-nboxes))cycle
+                     if(bfillz(ord1,jhc,khc) .ne. 0)cycle
+                     bfillz(ord1,jhc,khc)=2
+                     changes=changes+1
+                  enddo
+                  do nhc=-1,1
+                     ord1=jhc+nhc
+                     if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                     if(bfillz(ihc,ord1,khc).ne.0)cycle
+                     bfillz(ihc,ord1,khc)=2
+                     changes=changes+1
+                  enddo
+                  do nhc=-1,1
+                     ord1=khc+nhc
+                     if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                     if(bfillz(ihc,jhc,ord1).ne.0)cycle
+                     bfillz(ihc,jhc,ord1)=2
+                     changes=changes+1
+                  enddo
+                  bfillz(ihc,jhc,khc)=3
+                  enddo
+               enddo
+         enddo
+      enddo
+      !! CONTAMOS EL NÚMERO DE CAJAS
+      !! surface= cubiertas por puntos (células)!! outside= fuera de la morphología !! volume = dentro de la morphología
+      surface=0; volume=0; outside=0; total=0
+      do ihc=-nboxes,nboxes
+         do jhc=-nboxes,nboxes
+               do khc=-nboxes,nboxes
+                  if (bfillz(ihc,jhc,khc)==1)then
+                  surface=surface+1
+                  elseif(bfillz(ihc,jhc,khc)==0)then
+                  volume=volume+1
+                  else
+                  outside=outside+1
+                  endif
+               enddo
+         enddo
+      enddo
+      total=surface+volume
+      volumenes(2) = volume
+      if(volume==0)then
+         crompio = 0
+      end if
+      cociente = surface/volume
+      if(cociente>1)then
+         crompiopokito = 0
+      endif
+
+      !! Lo pasamos a 0=fuera; 1=dentro
+      do ihc=-nboxes,nboxes
+         do jhc=-nboxes,nboxes
+               do khc=-nboxes,nboxes
+                  if ( bfillz(ihc,jhc,khc).le.1)then
+                  bfillz(ihc,jhc,khc)=1
+                  else
+                  bfillz(ihc,jhc,khc)=0
+                  endif
+               enddo
+         enddo
+      enddo
+
+      !!Calculamos el volumen no compartido entre secciones en eje z !>>AL 17/01/24
+      per            = 0
+      compa_tot      = 0
+      differ         = 0
+      shared         = 0
+      pershared_x    = 0
+      comparaciones  = 0
+      ca             = 0
+      cb             = 0
+      coco           = 0
+
+      do ihc = (nboxes - 1), (-nboxes + 1 + numrowspersect), -numrowspersect !>>AL 17/01/24 top to bottom comparison
+         secciones = secciones + 1
+         do nhc = ihc - numrowspersect , (-nboxes + 1), -numrowspersect
+               do phc = 0, (numrowspersect - 1)
+                  if((nhc - phc) < (-nboxes+1))then;cycle; end if !in case you are trying to compare a section with i rows against a section with j rows where i>j
+                  do khc = (nboxes - 1), (-nboxes + 1), -1
+                     do jhc = (nboxes - 1), (-nboxes + 1), -1
+                           if(bfillz(ihc - phc,jhc,khc) == 0 .and. bfillz(nhc - phc,jhc,khc) == 0 ) cycle; !AL 17/01/24>> boxes of both sections are outside morphology
+                           if(bfillz(ihc - phc,jhc,khc) == 1 .and. bfillz(nhc - phc,jhc,khc) == 1 ) then;
+                              shared = shared + 1
+                           else
+                              differ = differ + 1
+                           end if
+                     end do
+                  end do
+                  if(shared == 0)then;differ = 0;end if; !when one of the sections is empty differ is max 
+               end do
+               if(shared == 0 .and. differ == 0)cycle                !>>AL 17/01/24 both sections are empty
+                                                                     !this can happen because the limits of the grid of boxes are determined
+                                                                     !by variable totmax which only considers max coordinate in one component
+                                                                     !so maybe in other component max coordinate is smaller so anything bigger is empty
+               per = (real(differ) / real(shared + differ)) + per    !>>AL 17/01/24 nonsharedvolume
+               shared = 0
+               differ = 0
+               comparaciones = comparaciones + 1
+         end do
+         if(comparaciones == 0)then;cycle; end if  !>>AL 17/01/24 this for the case in which all sections compared were empty 
+         pershared_x = per/real(comparaciones) + pershared_x
+         compa_tot = comparaciones + compa_tot
+         comparaciones = 0
+         per = 0
+      end do
+
+      pershared = pershared + pershared_x 
+      alfa = alfa + 0.064
+   end do 
+
+   pershared = pershared/iter
+   pershared_x = pershared
+
+   alfa = 0
+   pershared = 0
+   do ijk = 1,iter
+      !! ncoords guarda los puntos que vamos a usar para describir la morph
+      if(allocated(ncoords))deallocate(ncoords)
+      allocate(ncoords(1:newdots,1:3)) 
+      ncoords=0.0d0
+      !! 2. coordenadas de los nodos de la morphología
+      ord1=0
+      do ihc=1,nd
+         if(node(ihc)%tipus.ne.1)cycle
+         ord1=ord1+1
+         ncoords(ord1,1) = (node(ihc)%x ) 
+         ncoords(ord1,2) = (node(ihc)%y + alfa)
+         ncoords(ord1,3) = (node(ihc)%z) !Desplazamiento en eje z
+      enddo
+      cuantos = ord1
+      !! 3. Puntos extra entre las células de la morphología
+      do ihc=1,nd
+         if(node(ihc)%tipus.ne.1)cycle
+         do jhc=1,nneigh(ihc)
+               neich=neigh(ihc,jhc)
+               if(node(neich)%tipus.ne.1)cycle
+               do khc=1,nneigh(neich)
+                  neichi=neigh(neich,khc)
+                  if(node(neichi)%tipus.ne.1)cycle
+                  if(neichi==ihc)cycle
+                  do phc=1,puntos_fill
+                     ahc = node(neich)%x - node(ihc)%x
+                     bhc = (node(neich)%y + alfa) - (node(ihc)%y + alfa)
+                     chc = node(neich)%z - node(ihc)%z
+                     
+                     ahc2 = node(neichi)%x - node(ihc)%x
+                     bhc2 = (node(neichi)%y + alfa) - (node(ihc)%y + alfa)
+                     chc2 = node(neichi)%z - node(ihc)%z 
+                     
+                     call random_number(u1); call random_number(u2); !random real between 0 <= 1
+                     if ( (u1+u2) > 1.0d0)then
+                           u1=1-u1
+                           u2=1-u2
+                     endif
+                     
+                     ahc3 = u1*ahc + u2*ahc2
+                     bhc3 = u1*bhc + u2*bhc2
+                     chc3 = u1*chc + u2*chc2
+                     ord1=ord1+1
+                     ncoords(ord1,1)= node(ihc)%x + ahc3
+                     ncoords(ord1,2)= (node(ihc)%y + alfa) + bhc3
+                     ncoords(ord1,3)= node(ihc)%z + chc3 
+                  enddo      
+               enddo
+         enddo 
+      enddo
+
+      !! 4. Calcular el tamaño de las cajas
+      maxx=0.0d0 
+      maxy=0.0d0 
+      maxz=0.0d0
+      do ihc=1,nd
+         if(abs(node(ihc)%x)>maxx) maxx=abs(node(ihc)%x)
+         if(abs(node(ihc)%y + alfa)>maxy) maxy=abs(node(ihc)%y + alfa)
+         if(abs(node(ihc)%z)>maxz) maxz=abs(node(ihc)%z)
+      enddo
+
+      totmax=0.0d0
+      totmax=maxx
+      if (maxy>totmax) totmax=maxy
+      if (maxz>totmax) totmax=maxz
+
+      maxadd=0.0d0
+      maxadd=nodeo(1)%add*size_box  !! TAMAÑO DE LAS CAJAS !!ESTO ES INDEPENDIENTE DE LA MORFO YA QUE nodeo%add NO CAMBIA
+      urv=1/maxadd           !! COEFICIENTE DE NORMALIZACIÓN PARA PASAR DE COORDENADAS DE NODO A ÍNDICE DE CAJA
+      nboxes=(urv*totmax) +2 !! NUMERO DE CAJAS !!AL>> Notar el +2. los extremos de bfillz (i.e.bfillz(+/-nboxes,+/-nboxes,+/-nboxes)) no tienen morfo adentro 
+
+      !! bfillz es la matriz con todas las cajas
+      if(allocated(bfillz))deallocate(bfillz)
+      allocate(bfillz(-nboxes:nboxes,-nboxes:nboxes,-nboxes:nboxes))
+      bfillz=0
+
+      !! Llenamos bfillz con las coordenadas de los puntos
+      !0 = dentro morfo !1 = epitelio !3 = fuera epitelio
+      do ihc=1,ord1
+         jhc=nint(ncoords(ihc,1)*urv)
+         khc=nint(ncoords(ihc,2)*urv)
+         nhc=nint(ncoords(ihc,3)*urv)
+         bfillz(jhc,khc,nhc) = 1
+      end do
+
+      changes  = 11
+      ord1     = 0
+      !!5. RELLENAMOS EL EXTERIOR DE LA MORPHOLOGÍA COMO EN EL PAINT
+      bfillz(nboxes,nboxes,nboxes) = 2
+      do while(changes>0)     !esto sobra
+         changes=0
+         do ihc=-nboxes,nboxes
+               do jhc=-nboxes,nboxes
+                  do khc=-nboxes,nboxes
+                     if(bfillz(ihc,jhc,khc).ne.2)cycle
+                     do nhc=-1,1
+                           ord1=ihc+nhc
+                           if(ord1>nboxes .or. ord1<(-nboxes))cycle
+                           if(bfillz(ord1,jhc,khc) .ne. 0)cycle
+                           bfillz(ord1,jhc,khc)=2
+                           changes=changes+1
+                     enddo
+                     do nhc=-1,1
+                           ord1=jhc+nhc
+                           if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                           if(bfillz(ihc,ord1,khc).ne.0)cycle
+                           bfillz(ihc,ord1,khc)=2
+                           changes=changes+1
+                     enddo
+                     do nhc=-1,1
+                           ord1=khc+nhc
+                           if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                           if(bfillz(ihc,jhc,ord1).ne.0)cycle
+                           bfillz(ihc,jhc,ord1)=2
+                           changes=changes+1
+                     enddo
+                     bfillz(ihc,jhc,khc)=3
+                  enddo
+               enddo
+         enddo
+      enddo
+      !! CONTAMOS EL NÚMERO DE CAJAS
+      !! surface= cubiertas por puntos (células) !! outside= fuera de la morphología !! volume = dentro de la morphología
+      surface=0; volume=0; outside=0; total=0
+      do ihc=-nboxes,nboxes
+         do jhc=-nboxes,nboxes
+               do khc=-nboxes,nboxes
+                  if (bfillz(ihc,jhc,khc)==1)then
+                  surface=surface+1
+                  elseif(bfillz(ihc,jhc,khc)==0)then
+                  volume=volume+1
+                  else
+                  outside=outside+1
+                  endif
+               enddo
+         enddo
+      enddo
+      total=surface+volume
+      volumenes(3) = volume
+      if(volume==0)then
+         crompio = 0
+      end if
+      cociente = surface/volume
+      if(cociente>1)then
+         crompiopokito = 0
+      endif
+      !! Lo pasamos a 0=fuera; 1=dentro
+      do ihc=-nboxes,nboxes
+         do jhc=-nboxes,nboxes
+               do khc=-nboxes,nboxes
+                  if ( bfillz(ihc,jhc,khc).le.1)then
+                  bfillz(ihc,jhc,khc)=1
+                  else
+                  bfillz(ihc,jhc,khc)=0
+                  endif
+               enddo
+         enddo
+      enddo
+
+      !!Calculamos el volumen no compartido entre secciones en eje y !>>AL 17/01/24
+      per            = 0
+      compa_tot      = 0
+      differ         = 0
+      shared         = 0
+      pershared_y    = 0
+      comparaciones  = 0    
+      do jhc = (nboxes - 1), (-nboxes + 1 + numrowspersect), -numrowspersect !>>AL 17/01/24 top to bottom comparison
+         secciones = secciones + 1
+         do nhc = jhc - numrowspersect , (-nboxes + 1), -numrowspersect
+               do phc = 0, (numrowspersect - 1)
+                  if((nhc - phc) < (-nboxes+1))then; cycle; end if !in case you are trying to compare a section with i rows against a section with j rows where i>j
+                  do ihc = (nboxes - 1), (-nboxes + 1), -1
+                  do khc = (nboxes - 1), (-nboxes + 1), -1
+                     if(bfillz(ihc,jhc - phc,khc) == 0 .and. bfillz(ihc,nhc - phc,khc) == 0 ) cycle; !AL 17/01/24>> boxes of both sections are outside morphology
+                     if(bfillz(ihc,jhc - phc,khc) == 1 .and. bfillz(ihc,nhc - phc,khc) == 1 ) then;
+                           shared = shared + 1
+                     else
+                           differ = differ + 1
+                     end if
+                  end do
+                  end do
+                  if(shared == 0)then;differ = 0;end if; !when one of the sections is empty differ is max 
+               end do
+               if(shared == 0 .and. differ == 0)cycle                !>>AL 17/01/24 both sections are empty
+                                                                  !this can happen because the limits of the grid of boxes are determined
+                                                                  !by variable totmax which only considers max coordinate in one component
+                                                                  !so maybe in other component max coordinate is smaller so anything bigger is empty
+               per = (real(differ) / real(shared + differ)) + per    !>>AL 17/01/24 nonsharedvolume
+               shared = 0
+               differ = 0
+               comparaciones = comparaciones + 1
+         end do
+         if(comparaciones == 0)then;cycle; end if  !>>AL 17/01/24 this for the case in which all sections compared were empty 
+         pershared_y = per/real(comparaciones) + pershared_y
+         compa_tot = comparaciones + compa_tot
+         comparaciones = 0
+         per = 0
+      end do
+
+      pershared = pershared + pershared_y 
+      alfa = alfa + 0.064
+   end do 
+
+   pershared = pershared/iter
+   pershared_y = pershared
+
+   fitelli = 0
+   fitelli = (pershared_x +pershared_y+pershared_z)/3
+   if(crompio==0)fitelli=0
+   if(crompiopokito==0)then 
+      fitelli=0                                        !!>>AL 4-4-24 this is in case volumen is not 0 but there is a whole in morphology's surface
+      !volumenes(1) = 1
+      !volumenes(2) = 1
+      !volumenes(3) = 1
+   end if
+   print *, "We are here!!"
+   print *, "fitelli:", fitelli 
+   open (123, file="individual.datfitness")
+         write(123,*) fitelli
+   close(123)
+   
+end subroutine 
+
+subroutine trait_distance(fitelli)
+   Implicit none
+
+   integer ::  ihc, jhc, khc, surface, volume, outside, total, landmark_number
+   integer ::  ord1,  lhc, changes, mhc, nhc, neich, neichi, newdots, phc
+   real*8  :: maxcoord, centroidx, centroidy, centroidz, centroid_size, sumx, sumy, sumz
+   real*8  ::  ahc, bhc, chc, ahc2, bhc2, chc2, ahc3, bhc3, chc3, u1, u2, EMD,totmax2
+   real*8  :: maxx, maxy,  maxz,  maxadd, fitelli
+   real*8, dimension(26)   :: corners, landmarks
+   real*8, dimension(26,3) :: cornerscoord
+   real*8, dimension(26)   :: target_corners, distances
+   real*8, dimension(26,3) :: target_landmarks
+   real, allocatable, dimension(:,:)      :: ncoords
+   integer, allocatable, dimension(:,:,:) :: bfillz 
+   !******************************************************************************************************!
+   call iniboxes
+   call neighbor_build
+   
+   !>>AL 12-9-2024 Centroid
+   centroidx = 0;centroidy = 0;centroidz = 0
+   do ihc=1,nd
+      centroidx = centroidx + node(ihc)%x
+      centroidy = centroidy + node(ihc)%y
+      centroidz = centroidz + node(ihc)%z
+   enddo
+   
+   centroidx = centroidx/nd
+   centroidy = centroidy/nd
+   centroidz = centroidz/nd
+   
+   !centering landmarks around cero
+   do ihc=1,nd
+      node(ihc)%x = node(ihc)%x - centroidx
+      node(ihc)%y = node(ihc)%y - centroidy
+      node(ihc)%z = node(ihc)%z - centroidz
+   end do 
+   
+   newdots=0
+   do ihc=1,nd
+      if(node(ihc)%tipus.ne.1)cycle
+      newdots=newdots+1
+      do jhc=1,nneigh(ihc)
+         neich=neigh(ihc,jhc)
+         if(node(neich)%tipus.ne.1)cycle
+         do khc=1,nneigh(neich)
+            neichi=neigh(neich,khc)
+            if(node(neichi)%tipus.ne.1)cycle
+            if(neichi==ihc)cycle
+               newdots=newdots+10
+         enddo
+      enddo
+   enddo
+   
+   if(allocated(ncoords))deallocate(ncoords)
+   allocate(ncoords(1:newdots,1:3))
+   ncoords=0.0d0
+   
+   ord1=0
+   do ihc=1,nd
+      if(node(ihc)%tipus.ne.1)cycle
+      ord1=ord1+1
+      ncoords(ord1,1)=node(ihc)%x
+      ncoords(ord1,2)=node(ihc)%y
+      ncoords(ord1,3)=node(ihc)%z
+   enddo
+   
+   do ihc=1,nd
+      if(node(ihc)%tipus.ne.1)cycle
+      do jhc=1,nneigh(ihc)
+         neich=neigh(ihc,jhc)
+         if(node(neich)%tipus.ne.1)cycle
+         do khc=1,nneigh(neich)
+            neichi=neigh(neich,khc)
+            if(node(neichi)%tipus.ne.1)cycle
+            if(neichi==ihc)cycle
+               do phc=1,10
+                   ahc = node(neich)%x - node(ihc)%x
+                   bhc = node(neich)%y - node(ihc)%y
+                   chc = node(neich)%z - node(ihc)%z
+                   
+                   ahc2 = node(neichi)%x - node(ihc)%x
+                   bhc2 = node(neichi)%y - node(ihc)%y
+                   chc2 = node(neichi)%z - node(ihc)%z
+                   
+                   call random_number(u1); call random_number(u2);
+                   if ( (u1+u2) > 1.0d0)then
+                      u1=1-u1
+                      u2=1-u2
+                   endif
+                   
+                   ahc3 = u1*ahc + u2*ahc2
+                   bhc3 = u1*bhc + u2*bhc2
+                   chc3 = u1*chc + u2*chc2
+                   ord1=ord1+1
+                   ncoords(ord1,1)= node(ihc)%x + ahc3
+                   ncoords(ord1,2)= node(ihc)%y + bhc3
+                   ncoords(ord1,3)= node(ihc)%z + chc3
+               enddo      
+         enddo
+      enddo 
+   enddo
+   
+   maxx=0;maxy=0;maxz=0;totmax2=0
+   do ihc=1,nd
+      if(abs(node(ihc)%x)>maxx) maxx=abs(node(ihc)%x)
+      if(abs(node(ihc)%y)>maxy) maxy=abs(node(ihc)%y)
+      if(abs(node(ihc)%z)>maxz) maxz=abs(node(ihc)%z)
+   enddo
+   
+   totmax2=maxx
+   if (maxy>totmax2) totmax2=maxy
+   if (maxz>totmax2) totmax2=maxz
+   
+   maxadd=nodeo(1)%add*2
+   urv=1/maxadd
+   nboxes=(urv*totmax2) +2
+   
+   if(allocated(bfillz))deallocate(bfillz)
+   allocate(bfillz(-nboxes:nboxes,-nboxes:nboxes,-nboxes:nboxes))
+   bfillz=0
+   
+   do ihc=1,ord1
+      jhc=nint(ncoords(ihc,1)*urv)
+      khc=nint(ncoords(ihc,2)*urv)
+      nhc=nint(ncoords(ihc,3)*urv)
+      bfillz(jhc,khc,nhc)=1
+   enddo
+   
+   bfillz(nboxes,nboxes,nboxes)=2
+   changes=11; ord1=0
+   do while(changes>0)
+      changes=0
+      do ihc=-nboxes,nboxes
+         do jhc=-nboxes,nboxes
+            do khc=-nboxes,nboxes
+               if( bfillz(ihc,jhc,khc).ne.2)cycle
+               do nhc=-1,1
+                  ord1=ihc+nhc
+                  if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                  if(bfillz(ord1,jhc,khc).ne.0)cycle
+                  bfillz(ord1,jhc,khc)=2
+                  changes=changes+1
+               enddo
+               do nhc=-1,1
+                  ord1=jhc+nhc
+                  if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                  if(bfillz(ihc,ord1,khc).ne.0)cycle
+                  bfillz(ihc,ord1,khc)=2
+                  changes=changes+1
+               enddo
+               do nhc=-1,1
+                  ord1=khc+nhc
+                  if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                  if(bfillz(ihc,jhc,ord1).ne.0)cycle
+                  bfillz(ihc,jhc,ord1)=2
+                  changes=changes+1
+               enddo
+               bfillz(ihc,jhc,khc)=3
+            enddo
+         enddo
+      enddo
+   enddo
+   
+   surface=0; volume=0; outside=0; total=0
+   do ihc=-nboxes,nboxes
+      do jhc=-nboxes,nboxes
+         do khc=-nboxes,nboxes
+            if (bfillz(ihc,jhc,khc)==1)then
+               surface=surface+1
+            elseif(bfillz(ihc,jhc,khc)==0)then
+               volume=volume+1
+            else
+               outside=outside+1
+            endif
+         enddo
+      enddo
+   enddo
+   
+   total=surface+volume
+
+   open (123, file="individual.volume.txt")
+      write(123,*) volume                 !!>>AL 4-4-24: If no displacement, volume(1)=volume(2)=volume(3)
+   close(123)
+
+   !>>AL 13-9-2024: get landmark coordinates in cartesian coordinate system
+   corners=0.0d0
+   nhc=0; mhc=0
+   do khc=-1,1
+      do lhc=-1,1
+         do jhc=-1,1
+            if(khc==0.and.lhc==0.and.jhc==0)cycle
+            do ihc=-nboxes,0
+               if (bfillz(ihc*khc,ihc*lhc,ihc*jhc).gt.1)cycle
+                  nhc=nhc+1
+                  cornerscoord(nhc,1)=real(ihc*khc)*maxadd
+                  cornerscoord(nhc,2)=real(ihc*lhc)*maxadd
+                  cornerscoord(nhc,3)=real(ihc*jhc)*maxadd
+                  exit
+            enddo      
+         enddo
+      enddo
+   enddo
+   
+   open(10, file="target_1.dat") !this are already normalized
+   do ihc=1,26
+      read(10,*) target_landmarks(ihc,1), target_landmarks(ihc,2), target_landmarks(ihc,3)
+   end do 
+   close(10)
+
+   landmarks = 1
+   landmark_number = 0
+
+   do ihc=1,26
+      if(target_landmarks(ihc,1) == 0 .and. target_landmarks(ihc,2) == 0 &
+      .and. target_landmarks(ihc,3) == 0)then 
+         landmarks(ihc) = 0; 
+      else 
+         landmark_number = landmark_number + 1; 
+      endif
+   end do 
+
+   !>>AL 12-9-2024 Centroid
+   !centroidx = 0;centroidy = 0;centroidz = 0
+   !do ihc=1,26
+   !   if(landmarks(ihc) == 0)then; cycle; endif
+   !   centroidx = cornerscoord(ihc,1) + centroidx
+   !   centroidy = cornerscoord(ihc,2) + centroidy
+   !   centroidz = cornerscoord(ihc,3) + centroidz
+   !end do 
+   
+   !centroidx = centroidx/real(landmark_number)
+   !centroidy = centroidy/real(landmark_number)
+   !centroidz = centroidz/real(landmark_number)
+
+   !print *, "Centroids before centering:"
+   !print *, "x:",centroidx,"y:",centroidy,"z:",centroidz
+   
+   !centering landmarks around cero
+   !do ihc=1,26
+   !   if(landmarks(ihc) == 0)then; cycle; endif
+   !   cornerscoord(ihc,1) = cornerscoord(ihc,1) - centroidx
+   !   cornerscoord(ihc,2) = cornerscoord(ihc,2) - centroidy
+   !   cornerscoord(ihc,3) = cornerscoord(ihc,3) - centroidz
+   !end do 
+   
+   sumx = 0;sumy = 0;sumz = 0
+   do ihc=1, 26
+      if(landmarks(ihc) == 0)then; cycle; endif
+      sumx = sumx + (cornerscoord(ihc,1))**2
+      sumy = sumy + (cornerscoord(ihc,2))**2
+      sumz = sumz + (cornerscoord(ihc,3))**2
+   end do 
+   
+   !>>AL 12-9-2024 Centroid size 
+   centroid_size = sqrt(sumx + sumy + sumz)
+   
+   cornerscoord(:,1) = cornerscoord(:,1)/centroid_size
+   cornerscoord(:,2) = cornerscoord(:,2)/centroid_size
+   cornerscoord(:,3) = cornerscoord(:,3)/centroid_size
+   
+   maxcoord=0.0d0
+   corners=6666.0d0
+   !normalizing distances of landmarks with respect to centroid size
+   !corners = corners/centroid_size
+
+   distances = 0
+   do ihc=1,26
+      if(landmarks(ihc) == 0)then; cycle; endif
+      distances(ihc)=sqrt((cornerscoord(ihc,1)-target_landmarks(ihc,1))**2 + (cornerscoord(ihc,2) -&
+      target_landmarks(ihc,2))**2 &
+      +(cornerscoord(ihc,3) -target_landmarks(ihc,3))**2)
+   enddo
+
+   EMD = sum(distances)
+   if(EMD==0.0d0) EMD=0.0010d0
+   fitelli = 1.0d0/EMD
+
+   open(616,file="rob.val")
+   if (volume==0)then
+      fitelli=0.0d0
+      write(616,*) 0.0d0
+   else
+      write(616,*) 1.0d0
+   endif
+   close(616)
+
+   open (123, file="individual.datfitness")
+         write(123,*) fitelli
+   close(123)
+end subroutine trait_distance
+
+subroutine trait_distancenormalization(fitelli) !AL 11-11-24: this version is deprecated but part of legacy now
+   Implicit none
+
+   integer ::  ihc, jhc, khc, surface, volume, outside, total
+   integer ::  ord1,  lhc, changes, mhc, nhc, neich, neichi, newdots, phc
+   real*8  :: maxcoord, centroidx, centroidy, centroidz, centroid_size, sumx, sumy, sumz
+   real*8  ::  ahc, bhc, chc, ahc2, bhc2, chc2, ahc3, bhc3, chc3, u1, u2, EMD,totmax2
+   real*8  :: maxx, maxy,  maxz,  maxadd, fitelli,sumdist
+   real*8, dimension(26)   :: corners
+   real*8, dimension(26,3) :: cornerscoord
+   real*8, dimension(26)   :: distances
+   real*8, dimension(14)   :: target_distances,diff_distances
+   real*8, dimension(26)   :: target_corners
+   real, allocatable, dimension(:,:)      :: ncoords
+   integer, allocatable, dimension(:,:,:) :: bfillz 
+   !******************************************************************************************************!
+   call iniboxes
+   call neighbor_build
+   
+   !>>AL 12-9-2024 Centroid
+   centroidx = 0;centroidy = 0;centroidz = 0
+   do ihc=1,nd
+      centroidx = centroidx + node(ihc)%x
+      centroidy = centroidy + node(ihc)%y
+      centroidz = centroidz + node(ihc)%z
+   enddo
+   
+   centroidx = centroidx/nd
+   centroidy = centroidy/nd
+   centroidz = centroidz/nd
+   
+   !centering landmarks around cero
+   do ihc=1,nd
+      node(ihc)%x = node(ihc)%x - centroidx
+      node(ihc)%y = node(ihc)%y - centroidy
+      node(ihc)%z = node(ihc)%z - centroidz
+   end do 
+   
+   newdots=0
+   do ihc=1,nd
+      if(node(ihc)%tipus.ne.1)cycle
+      newdots=newdots+1
+      do jhc=1,nneigh(ihc)
+         neich=neigh(ihc,jhc)
+         if(node(neich)%tipus.ne.1)cycle
+         do khc=1,nneigh(neich)
+            neichi=neigh(neich,khc)
+            if(node(neichi)%tipus.ne.1)cycle
+            if(neichi==ihc)cycle
+               newdots=newdots+10
+         enddo
+      enddo
+   enddo
+   
+   if(allocated(ncoords))deallocate(ncoords)
+   allocate(ncoords(1:newdots,1:3))
+   ncoords=0.0d0
+   
+   ord1=0
+   do ihc=1,nd
+      if(node(ihc)%tipus.ne.1)cycle
+      ord1=ord1+1
+      ncoords(ord1,1)=node(ihc)%x
+      ncoords(ord1,2)=node(ihc)%y
+      ncoords(ord1,3)=node(ihc)%z
+   enddo
+   
+   do ihc=1,nd
+      if(node(ihc)%tipus.ne.1)cycle
+      do jhc=1,nneigh(ihc)
+         neich=neigh(ihc,jhc)
+         if(node(neich)%tipus.ne.1)cycle
+         do khc=1,nneigh(neich)
+            neichi=neigh(neich,khc)
+            if(node(neichi)%tipus.ne.1)cycle
+            if(neichi==ihc)cycle
+               do phc=1,10
+                   ahc = node(neich)%x - node(ihc)%x
+                   bhc = node(neich)%y - node(ihc)%y
+                   chc = node(neich)%z - node(ihc)%z
+                   
+                   ahc2 = node(neichi)%x - node(ihc)%x
+                   bhc2 = node(neichi)%y - node(ihc)%y
+                   chc2 = node(neichi)%z - node(ihc)%z
+                   
+                   call random_number(u1); call random_number(u2);
+                   if ( (u1+u2) > 1.0d0)then
+                      u1=1-u1
+                      u2=1-u2
+                   endif
+                   
+                   ahc3 = u1*ahc + u2*ahc2
+                   bhc3 = u1*bhc + u2*bhc2
+                   chc3 = u1*chc + u2*chc2
+                   ord1=ord1+1
+                   ncoords(ord1,1)= node(ihc)%x + ahc3
+                   ncoords(ord1,2)= node(ihc)%y + bhc3
+                   ncoords(ord1,3)= node(ihc)%z + chc3
+               enddo      
+         enddo
+      enddo 
+   enddo
+   
+   maxx=0;maxy=0;maxz=0;totmax2=0
+   do ihc=1,nd
+      if(abs(node(ihc)%x)>maxx) maxx=abs(node(ihc)%x)
+      if(abs(node(ihc)%y)>maxy) maxy=abs(node(ihc)%y)
+      if(abs(node(ihc)%z)>maxz) maxz=abs(node(ihc)%z)
+   enddo
+   
+   totmax2=maxx
+   if (maxy>totmax2) totmax2=maxy
+   if (maxz>totmax2) totmax2=maxz
+   
+   maxadd=nodeo(1)%add*2
+   urv=1/maxadd
+   nboxes=(urv*totmax2) +2
+   
+   if(allocated(bfillz))deallocate(bfillz)
+   allocate(bfillz(-nboxes:nboxes,-nboxes:nboxes,-nboxes:nboxes))
+   bfillz=0
+   
+   do ihc=1,ord1
+      jhc=nint(ncoords(ihc,1)*urv)
+      khc=nint(ncoords(ihc,2)*urv)
+      nhc=nint(ncoords(ihc,3)*urv)
+      bfillz(jhc,khc,nhc)=1
+   enddo
+   
+   bfillz(nboxes,nboxes,nboxes)=2
+   changes=11; ord1=0
+   do while(changes>0)
+      changes=0
+      do ihc=-nboxes,nboxes
+         do jhc=-nboxes,nboxes
+            do khc=-nboxes,nboxes
+               if( bfillz(ihc,jhc,khc).ne.2)cycle
+               do nhc=-1,1
+                  ord1=ihc+nhc
+                  if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                  if(bfillz(ord1,jhc,khc).ne.0)cycle
+                  bfillz(ord1,jhc,khc)=2
+                  changes=changes+1
+               enddo
+               do nhc=-1,1
+                  ord1=jhc+nhc
+                  if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                  if(bfillz(ihc,ord1,khc).ne.0)cycle
+                  bfillz(ihc,ord1,khc)=2
+                  changes=changes+1
+               enddo
+               do nhc=-1,1
+                  ord1=khc+nhc
+                  if(ord1>nboxes.or.ord1<(-nboxes))cycle
+                  if(bfillz(ihc,jhc,ord1).ne.0)cycle
+                  bfillz(ihc,jhc,ord1)=2
+                  changes=changes+1
+               enddo
+               bfillz(ihc,jhc,khc)=3
+            enddo
+         enddo
+      enddo
+   enddo
+   
+   surface=0; volume=0; outside=0; total=0
+   do ihc=-nboxes,nboxes
+      do jhc=-nboxes,nboxes
+         do khc=-nboxes,nboxes
+            if (bfillz(ihc,jhc,khc)==1)then
+               surface=surface+1
+            elseif(bfillz(ihc,jhc,khc)==0)then
+               volume=volume+1
+            else
+               outside=outside+1
+            endif
+         enddo
+      enddo
+   enddo
+   
+   total=surface+volume
+
+   open (123, file="individual.volume.txt")
+      write(123,*) volume                 !!>>AL 4-4-24: If no displacement, volume(1)=volume(2)=volume(3)
+   close(123)
+
+   !>>AL 13-9-2024: get landmark coordinates in cartesian coordinate system
+   corners=0.0d0
+   nhc=0; mhc=0
+   do khc=-1,1
+      do lhc=-1,1
+         do jhc=-1,1
+            if(khc==0.and.lhc==0.and.jhc==0)cycle
+            do ihc=-nboxes,0
+               if (bfillz(ihc*khc,ihc*lhc,ihc*jhc).gt.1)cycle
+                  nhc=nhc+1
+                  cornerscoord(nhc,1)=real(ihc*khc)*maxadd
+                  cornerscoord(nhc,2)=real(ihc*lhc)*maxadd
+                  cornerscoord(nhc,3)=real(ihc*jhc)*maxadd
+                  exit
+            enddo      
+         enddo
+      enddo
+   enddo
+   
+   open(10, file="target_1.dat") !this distances should be already normalized
+      read(10,*) target_distances
+   close(10)
+
+!the following is not correct. the actual reference system is different. check old template
+   sumdist        = 0
+   distances      = 0                                    
+   distances(5)   = sqrt(sum((cornerscoord(5,:)**2)))
+   distances(22)  = sqrt(sum((cornerscoord(22,:)**2)))
+   distances(13)  = sqrt(sum((cornerscoord(13,:)**2)))
+   distances(14)  = sqrt(sum((cornerscoord(14,:)**2)))
+   distances(11)  = sqrt(sum((cornerscoord(11,:)**2)))
+   distances(18)  = sqrt(sum((cornerscoord(18,:)**2)))
+   distances(1)   = sqrt(sum((cornerscoord(1,:)**2)))
+   distances(3)   = sqrt(sum((cornerscoord(3,:)**2)))
+   distances(20)  = sqrt(sum((cornerscoord(20,:)**2)))
+   distances(16)  = sqrt(sum((cornerscoord(16,:)**2)))
+   distances(24)  = sqrt(sum((cornerscoord(24,:)**2)))
+   distances(7)   = sqrt(sum((cornerscoord(7,:)**2)))
+   distances(9)   = sqrt(sum((cornerscoord(9,:)**2)))
+   distances(26)  = sqrt(sum((cornerscoord(26,:)**2)))
+   
+   do ihc=1,14
+      sumdist = sumdist + distances(ihc)
+   end do 
+
+   distances = distances/sumdist
+
+   diff_distances = 0d0
+   diff_distances(1) = abs(target_distances(1)- distances(5))
+   diff_distances(2) = abs(target_distances(2)- distances(22))
+   diff_distances(3) = abs(target_distances(3)- distances(13))
+   diff_distances(4) = abs(target_distances(4)- distances(14))
+   diff_distances(5) = abs(target_distances(5)- distances(11))
+   diff_distances(6) = abs(target_distances(6)- distances(18))
+   diff_distances(7) = abs(target_distances(7)- distances(1))
+   diff_distances(8) = abs(target_distances(8)- distances(3))
+   diff_distances(9) = abs(target_distances(9)- distances(20))
+   diff_distances(10) = abs(target_distances(10)- distances(16))
+   diff_distances(11) = abs(target_distances(11)- distances(24))
+   diff_distances(12) = abs(target_distances(12)- distances(7))
+   diff_distances(13) = abs(target_distances(13)- distances(9))
+   diff_distances(14) = abs(target_distances(14)- distances(26))
+
+   EMD = sum(diff_distances)
+   fitelli = 1.0d0-EMD
+
+   open(616,file="rob.val")
+   if (volume==0)then
+      fitelli=0.0d0
+      write(616,*) 0.0d0
+   else
+      write(616,*) 1.0d0
+   endif
+   close(616)
+
+   open (123, file="individual.datfitness")
+         write(123,*) fitelli
+   close(123)
+
+end subroutine trait_distancenormalization
+
+subroutine traits_with_proyections(fitelli) !AL 11-11-24
+   
+   implicit none 
+   logical :: signo
+   integer :: ihc,jhc,khc,lhc,contador,contadora
+   real*8  :: size_box,maxx,maxy,maxz,totmax,linex,liney,linez,comp,t,dot_PA,dot_vv,mag,dlta,sumdist
+   real*8  :: x0(3), x2(3),mini(3),dire(3),projection(3),this(3),closest_projection(3),distances(14)
+   real*8  :: traits_morpho(26,3), fitelli,emd,centroidx,centroidy,centroidz
+   character*152 :: path, input, output
+   real, allocatable, dimension(:,:)  :: ncoords,cual_caja,orden_final_x,orden_final_y,orden_final_z
+   real, allocatable, dimension(:,:)  :: nodos_ep
+   integer, allocatable, dimension(:) :: indx
+   real*8, dimension(14) :: target_distances,diff_distances
+
+   !>>AL 12-9-2024 Centroid
+   centroidx = 0;centroidy = 0;centroidz = 0
+   do ihc=1,nd
+      centroidx = centroidx + node(ihc)%x
+      centroidy = centroidy + node(ihc)%y
+      centroidz = centroidz + node(ihc)%z
+   enddo
+   
+   centroidx = centroidx/nd
+   centroidy = centroidy/nd
+   centroidz = centroidz/nd
+   
+   !centering morpho around cero
+   do ihc=1,nd
+      node(ihc)%x = node(ihc)%x - centroidx
+      node(ihc)%y = node(ihc)%y - centroidy
+      node(ihc)%z = node(ihc)%z - centroidz
+   end do 
+   
+   !Generate the lines wich represent trait directions 
+   maxx=0.0d0; maxy=0.0d0; maxz=0.0d0
+   do ihc=1,nd
+      if(abs(node(ihc)%x)>maxx) maxx=abs(node(ihc)%x)
+      if(abs(node(ihc)%y)>maxy) maxy=abs(node(ihc)%y)
+      if(abs(node(ihc)%z)>maxz) maxz=abs(node(ihc)%z)
+   enddo
+
+   totmax=0.0d0
+   totmax=maxx
+   if (maxy>totmax) totmax=maxy
+   if (maxz>totmax) totmax=maxz
+
+   totmax = totmax + 0.1*totmax !with this value we'll generate the trait lines. They will be always longer than the morphology
+   dlta=nodeo(1)%add*2
+   traits_morpho = 0
+   contadora = 0
+   do ihc = 1,-1,-1
+      do jhc = 1,-1,-1
+         do khc = 1,-1,-1
+         if(ihc==0 .and. jhc==0 .and. khc==0)cycle
+            contadora = contadora + 1
+            !print*,"ihc:",ihc,"jhc:",jhc,"khc:",khc
+            !with the point in x2 we generate the trait direction vector, which is (x2 - 0)
+            x2(1)= totmax*ihc 
+            x2(2) = totmax*jhc
+            x2(3) = totmax*khc
+
+            contador = 0
+
+            dire = x2/sqrt(sum(x2**2)) !direction of trait vector 
+            do lhc=1,nd                                  !Count how many apical epithelial nodes there are
+               if(node(lhc)%tipus.ne.1)cycle             !only consider apical epithelial nodes
+
+               x0(1) = node(lhc)%x; x0(2) = node(lhc)%y; x0(3) = node(lhc)%z
+
+               if(ihc .ne. 0 ) then                       !only consider nodes in the same octant as direction vector
+                  signo = (sign(x0(1), x2(1)) .eq. x0(1)) !this is true if x0 and x1 have same sign
+                  if(.not. signo)cycle
+               end if
+               if(jhc .ne. 0 ) then
+                  signo = (sign(x0(2), x2(2)) .eq. x0(2))
+                  if(.not. signo)cycle
+               end if
+               if(khc .ne. 0 ) then
+                  signo = (sign(x0(3), x2(3)) .eq. x0(3))
+                  if(.not. signo)cycle
+               end if
+                
+               t = dot_product(dire,x0)                   !distance between 0 and projection of x0 on the line x2 (dot product)
+               projection = t*dire                        !projection vector of point x on trait direction, the magnitud will be trait value in case of closest point to trait line
+               this = projection - x0
+               
+               if(sqrt(sum(this**2)) > dlta) cycle       !magnitude of vector from projection vector to node coordinate vector (how far away from the direction is the node in consideration)
+               contador = contador + 1
+               if(contador == 1) then
+                  mini(1) = node(lhc)%x
+                  mini(2) = node(lhc)%y
+                  mini(3) = node(lhc)%z
+                  comp = sqrt(sum(projection**2))
+                  closest_projection = projection
+               else 
+                  mag = sqrt(sum(projection**2))
+                  if(mag > comp)then
+                     comp = mag
+                     mini(1) = node(lhc)%x
+                     mini(2) = node(lhc)%y
+                     mini(3) = node(lhc)%z
+                     closest_projection = projection
+                  end if
+               end if
+
+            end do
+            traits_morpho(contadora,1) = closest_projection(1)
+            traits_morpho(contadora,2) = closest_projection(2)
+            traits_morpho(contadora,3) = closest_projection(3)
+         end do 
+      end do 
+   end do 
+
+   distances = 0
+   distances(1) = sqrt(sum((traits_morpho(13,:)**2)))
+   distances(2) = sqrt(sum((traits_morpho(11,:)**2)))
+   distances(3) = sqrt(sum((traits_morpho(14,:)**2)))
+   distances(4) = sqrt(sum((traits_morpho(16,:)**2)))
+   distances(5) = sqrt(sum((traits_morpho(1,:)**2)))
+   distances(6) = sqrt(sum((traits_morpho(3,:)**2)))
+   distances(7) = sqrt(sum((traits_morpho(5,:)**2)))
+   distances(8) = sqrt(sum((traits_morpho(9,:)**2)))
+   distances(9) = sqrt(sum((traits_morpho(7,:)**2)))
+   distances(10) = sqrt(sum((traits_morpho(18,:)**2)))
+   distances(11) = sqrt(sum((traits_morpho(20,:)**2)))
+   distances(12) = sqrt(sum((traits_morpho(22,:)**2)))
+   distances(13) = sqrt(sum((traits_morpho(26,:)**2)))
+   distances(14) = sqrt(sum((traits_morpho(24,:)**2)))
+   
+   sumdist = 0
+   do ihc=1,14
+      sumdist = sumdist + distances(ihc)
+   end do 
+
+   distances = distances/sumdist
+
+   open(10, file="target_1.dat") !this distances should be already normalized
+      read(10,*) target_distances
+   close(10)
+
+   EMD = (sum(abs(target_distances(:) - distances(:))))
+
+   fitelli = 1.0d0-EMD
+
+   open (123, file="individual.datfitness")
+      write(123,*) fitelli
+   close(123)
+
+   open (124, file="individual.volume.txt")
+      write(124,*) 0.0
+   close(124)
+
+   !Checar problema de necesitar un fichero llamado individual.volume.txt. Escribirlo al calcular la asimetria bilateral.
+   !open (123, file="individual.volume.txt")
+   !   write(123,*) volume                 !!>>AL 4-4-24: If no displacement, volume(1)=volume(2)=volume(3)
+   !close(123)
+
+   open(616,file="rob.val") !checar por que necesitas esto. nuevamente, podria solo escribirlo en la parta de asimetria bilateral
+      write(616,*) 0.00111   
+   close(616)
+
+end subroutine traits_with_proyections
+
+subroutine traits_with_proyections_CS(fitelli) !AL 11-11-24
+   
+   implicit none 
+   logical :: signo
+   integer :: ihc,jhc,khc,lhc,contador,contadora
+   real*8  :: size_box,maxx,maxy,maxz,totmax,linex,liney,linez,comp,t,dot_PA,dot_vv,mag,dlta,sumdist
+   real*8  :: x0(3), x2(3),mini(3),dire(3),projection(3),this(3),closest_projection(3),distances(14)
+   real*8  :: traits_morpho(26,3), fitelli,emd,centroidx,centroidy,centroidz,suma,CS,dis
+   character*152 :: path, input, output
+   real, allocatable, dimension(:,:)  :: ncoords,cual_caja,orden_final_x,orden_final_y,orden_final_z
+   real, allocatable, dimension(:,:)  :: nodos_ep
+   integer, allocatable, dimension(:) :: indx
+   !real*8, dimension(14) :: target_distances,diff_distances
+   real*8, dimension(14,3) :: morpho_traits, target_traits
+   real*8, dimension(14)   :: trait_magnitudes
+
+   !>>AL 12-9-2024 Centroid
+   centroidx = 0;centroidy = 0;centroidz = 0
+   do ihc=1,nd
+      centroidx = centroidx + node(ihc)%x
+      centroidy = centroidy + node(ihc)%y
+      centroidz = centroidz + node(ihc)%z
+   enddo
+   
+   centroidx = centroidx/nd
+   centroidy = centroidy/nd
+   centroidz = centroidz/nd
+   
+   !centering morpho around cero
+   do ihc=1,nd
+      node(ihc)%x = node(ihc)%x - centroidx
+      node(ihc)%y = node(ihc)%y - centroidy
+      node(ihc)%z = node(ihc)%z - centroidz
+   end do 
+   
+   dlta=nodeo(1)%add*2                             !AL 19-3-25 nodeo%add is node%add at dev. time = 0, so it is always the same
+   traits_morpho = 0
+   contadora = 0
+   do ihc = 1,-1,-1
+      do jhc = 1,-1,-1
+         do khc = 1,-1,-1
+         if(ihc==0 .and. jhc==0 .and. khc==0)cycle
+            contadora = contadora + 1
+            !with the point in x2 we generate the trait direction vector, which is (x2 - 0)
+
+            x2(1) = ihc 
+            x2(2) = jhc
+            x2(3) = khc
+
+            contador = 0
+
+            dire = x2/sqrt(sum(x2**2)) !direction of trait vector 
+            do lhc=1,nd                                  !Count how many apical epithelial nodes there are
+               if(node(lhc)%tipus.ne.1)cycle             !only consider apical epithelial nodes
+
+               x0(1) = node(lhc)%x; x0(2) = node(lhc)%y; x0(3) = node(lhc)%z
+
+               if(ihc .ne. 0 ) then                       !only consider nodes in the same octant as direction vector
+                  signo = (sign(x0(1), x2(1)) .eq. x0(1)) !this is true if x0 and x1 have same sign
+                  if(.not. signo)cycle
+               end if
+               if(jhc .ne. 0 ) then
+                  signo = (sign(x0(2), x2(2)) .eq. x0(2))
+                  if(.not. signo)cycle
+               end if
+               if(khc .ne. 0 ) then
+                  signo = (sign(x0(3), x2(3)) .eq. x0(3))
+                  if(.not. signo)cycle
+               end if
+                
+               t = dot_product(dire,x0)                   !distance between 0 and projection of x0 on the line x2 (scalar projection)
+               projection = t*dire                        !projection vector of point x on trait direction, the magnitud will be trait value in case of closest and furthest point to trait line
+               this = projection - x0
+               
+               if(sqrt(sum(this**2)) > dlta) cycle       !magnitude of vector from projection vector to node coordinate vector (how far away from the direction is the node in consideration)
+               contador = contador + 1
+               if(contador == 1) then
+                  mini(1) = node(lhc)%x
+                  mini(2) = node(lhc)%y
+                  mini(3) = node(lhc)%z
+                  comp = sqrt(sum(projection**2))
+                  closest_projection = projection
+               else 
+                  mag = sqrt(sum(projection**2))
+                  if(mag > comp)then
+                     comp = mag
+                     mini(1) = node(lhc)%x
+                     mini(2) = node(lhc)%y
+                     mini(3) = node(lhc)%z
+                     closest_projection = projection
+                  end if
+               end if
+
+            end do
+            traits_morpho(contadora,1) = closest_projection(1)
+            traits_morpho(contadora,2) = closest_projection(2)
+            traits_morpho(contadora,3) = closest_projection(3)
+         end do 
+      end do 
+   end do 
+
+   morpho_traits(1,:)  = traits_morpho(13,:)     !(0,0,+) D1 
+   morpho_traits(2,:)  = traits_morpho(11,:)     !(0,+,0) D2
+   morpho_traits(3,:)  = traits_morpho(14,:)     !(0,0,-) D3 
+   morpho_traits(4,:)  = traits_morpho(16,:)     !(0,-,0) D4
+   morpho_traits(5,:)  = traits_morpho(1,:)      !(+,+,+) D5
+   morpho_traits(6,:)  = traits_morpho(3,:)      !(+,+,-) D6
+   morpho_traits(7,:)  = traits_morpho(5,:)      !(+,0,0) D7
+   morpho_traits(8,:)  = traits_morpho(9,:)      !(+,-,-) D8
+   morpho_traits(9,:)  = traits_morpho(7,:)      !(+,-,+) D9
+   morpho_traits(10,:) = traits_morpho(18,:)     !(-,+,+) D10
+   morpho_traits(11,:) = traits_morpho(20,:)     !(-,+,-) D11
+   morpho_traits(12,:) = traits_morpho(22,:)     !(-,0,0) D12
+   morpho_traits(13,:) = traits_morpho(26,:)     !(-,-,-) D13
+   morpho_traits(14,:) = traits_morpho(24,:)     !(-,-,+) D14
+
+   !calculate centroid size 
+   suma = 0
+   do ihc=1,14
+      suma = suma + sum(morpho_traits(ihc,:)**2)
+   end do
+
+   CS = sqrt(suma)
+
+  !normalize
+  morpho_traits = morpho_traits/CS
+
+   !open(10, file=target) important
+   open(10, file="target_1.dat") !this distances should be already normalized
+      do ihc = 1, 14
+        read(10, *) target_traits(ihc, 1), target_traits(ihc, 2), target_traits(ihc, 3)  ! Read each row
+      end do
+   close(10)
+
+   dis = 0
+   do ihc = 1, 14
+      dis = dis + sqrt(sum((target_traits(ihc,:) - morpho_traits(ihc,:))**2))
+   end do
+
+   fitelli = dis
+
+   open (123, file="individual.datfitness")
+      write(123,*) fitelli
+   close(123)
+
+   open (124, file="individual.volume.txt")
+      write(124,*) 0.0
+   close(124)
+
+   open(616,file="rob.val") !checar por que necesitas esto. nuevamente, podria solo escribirlo en la parta de asimetria bilateral
+      write(616,*) 0.00111   
+   close(616)
+
+   !save trait magnitudes
+   do ihc = 1, 14
+      trait_magnitudes(ihc) = sqrt(sum(morpho_traits(ihc,:)**2))
+   end do
+
+   open(616,file="traits_local.dat")
+      write(616,*) trait_magnitudes   
+   close(616)
+
+end subroutine traits_with_proyections_CS
+
 end module  
-  

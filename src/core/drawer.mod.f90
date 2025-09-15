@@ -1,4 +1,4 @@
-!    EmbryoMaker software (General Node Model)
+
 !    Computational model to simulate morphogenetic processes in living organs and tissues.
 !    Copyright (C) 2014 Miquel Marin-Riera, Miguel Brun-Usan, Roland Zimm, Tommi Välikangas & Isaac Salazar-Ciudad
 
@@ -56,8 +56,9 @@ integer(kind=glint), parameter :: ZOOM = 1, PAN = 2, ROTATE = 3, SCALEX = 4, &
 integer(kind=glint), parameter :: RESET = 10, ABOVE = 11, FRONT = 12, pers = 14, QUIT = 13
 !real(kind=gldouble), parameter :: PI = 3.141592653589793_gldouble
 real(kind=gldouble), public :: esca
-integer(glint), public :: iqpas
-
+!integer(glint), public :: iqpas,leave_control,gen_eleccio
+integer(glint), public :: leave_control,gen_eleccio
+real*8 , public :: iqpas
 
 type, private :: cart2D ! 2D cartesian coordinates
    real(kind=gldouble) :: x, y
@@ -973,15 +974,20 @@ case(PAS)
      call iteracio(iqpas)
    case(GLUT_KEY_RIGHT)
 
-   if(fix_run==0)then !>>Miquel2-10-14
-     dyn=1
-   else
-     dyn=0
-   end if
-
+     if(fix_run==0)then !>>Miquel2-10-14
+       dyn=1
+     else
+       dyn=0
+     end if
+     leave_control=0 ! >>> Is 23-9-24
      call iteracio(iqpas)
    case(GLUT_KEY_LEFT)
-     call go_iteration_back(1)
+     !call go_iteration_back(1)
+     leave_control=1                   ! >>> Is 4-7-24
+     if (gen_eleccio<0) gen_eleccio=0  ! >>> Is 4-7-24
+     if (gen_eleccio>=ng) gen_eleccio=0! >>> Is 4-7-24
+     print *,"the plotted gene is...",gen_eleccio+1 ! >>> Is 4-7-24
+     gen_eleccio=gen_eleccio+1   ! >>> Is 4-7-24
    end select
 case(ROTATE)
    select case(key)
@@ -1452,13 +1458,14 @@ subroutine inivisualitzacio
   flag(30)=conf_flag(30)!epithelium
   flag(31)=conf_flag(31)!mesenchyme
   flag(32)=conf_flag(32)!ecm
-!  flag(33)=conf_flag(33)!epigrid
+  flag(33)=conf_flag(33)!epigrid !AL 13-6-25: I uncommented this because this shows polarized cells
   !flag(34)=0
   flag(35)=conf_flag(35)!eggshell !miguel4-11-13
   flag(36)=conf_flag(36)!plot the "hold" nodes (node()%fix=1) !>>>>Miquel15-1-14
   flag(37)=conf_flag(37)!plot cell contour  !>>Miquel29-8-14
   flag(38)=conf_flag(38)!plot intercellular contour  !>>Miquel29-8-14
   flag(39)=conf_flag(39)!plot displacement of nodes respect i.c.  >>>>Miquel26-3-14
+  flag(41)=conf_flag(41)!plot displacement of nodes respect i.c.  >>>>Miquel26-3-14  
   !flag(41)=conf_flag(41)!dynamic/fixed display box !>>Miquel30-9-14
   !plotting window
  
@@ -2047,6 +2054,10 @@ call glNewList(1_gluint,gl_compile_and_execute)
   enddo                                                                          !!>> HC 12-2-2024
   !BALL COLORS MAX AND MINS
 
+  if (leave_control==1) then                      ! >>> Is 4-7-24
+    colorselection=45                             ! >>> Is 4-7-24
+  end if                                          ! >>> Is 4-7-24
+
   if(custom_colorselection==colorselection)then
     mine=custom_minval ; maxe=custom_maxval
   else
@@ -2078,7 +2089,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
     case(25) ; mine=minval(node(:nd)%dif) ; maxe=maxval(node(:nd)%dif)
     case(26) ; mine=minval(node(:nd)%kfi) ; maxe=maxval(node(:nd)%kfi)
     case(27) ; mine=minval(node(:nd)%pla) ; maxe=maxval(node(:nd)%pla)
-    case(28) ; mine=minval(node(:nd)%kvol) ; maxe=maxval(node(:nd)%kvol)
+    case(28) ; mine=minval(node(:nd)%voc) ; maxe=maxval(node(:nd)%voc)
     case(29) ; mine=1 ;maxe=7 !mine=minval(node(:nd)%tipus) ; maxe=maxval(node(:nd)%tipus) !this is tipus
     case(30) ; mine=minval(node(:nd)%icel) ; maxe=maxval(node(:nd)%icel)
     case(31) ; mine=minval(node(:nd)%altre) ; maxe=maxval(node(:nd)%altre)
@@ -2087,6 +2098,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
     case(34) ; mine=0;maxe=1!minval(node(:nd)%fix) ; maxe=maxval(node(:nd)%fix) 
     case(35) ; mine=minval(node(:nd)%ndiv) ; maxe=maxval(node(:nd)%ndiv)        !!>> HC 16-3-2022
     case(36) ; mine=minval(discentch(:nd)) ; maxe=maxval(discentch(:nd))        !!>> HC 12-2-2024
+    case(37) ; mine=minval(cels(node(:nd)%icel)%fase) ; maxe=maxval(cels(node(:nd)%icel)%fase)        !!>>> Is 12-9-24    
     !case(36) ; if (chogen==0) then
     !           chogen=1
     !           mine=minval(gex(:nd,chogen)) ; maxe=maxval(gex(:nd,chogen))
@@ -2113,33 +2125,39 @@ call glNewList(1_gluint,gl_compile_and_execute)
     !           end if
     !             mine=minval(gex(:nd,chogen)) ; maxe=maxval(gex(:nd,chogen))
     !           end if
-    case(37) ; mine=0d0 ; maxe=1d0
-    case(38) ; do i=1,nd ; disx(i)=node(i)%x-node(i)%orix ; end do 
+    case(39) ; mine=0d0 ; maxe=1d0
+    case(40) ; do i=1,nd ; disx(i)=node(i)%x-node(i)%orix ; end do 
                mine=minval(disx) ; maxe=maxval(disx)
-    case(39) ; do i=1,nd ; disy(i)=node(i)%y-node(i)%oriy ; end do 
+    case(41) ; do i=1,nd ; disy(i)=node(i)%y-node(i)%oriy ; end do 
                mine=minval(disy) ; maxe=maxval(disy)
-    case(40) ; do i=1,nd ; disz(i)=node(i)%z-node(i)%oriz ; end do 
+    case(42) ; do i=1,nd ; disz(i)=node(i)%z-node(i)%oriz ; end do 
                mine=minval(disz) ; maxe=maxval(disz)
 !    case(40) ; !do i=1,nd 
                !distot(i)=sqrt((node(i)%x-node(i)%orix)**2+(node(i)%y-node(i)%oriy)**2+(node(i)%z-node(i)%oriz)**2) 
                !end do 
                !mine=minval(distot) ; maxe=maxval(distot)
-    case(41) ; do i=1,nd 
+    case(43) ; do i=1,nd 
                distot(i)=sqrt(px(i)**2+py(i)**2+pz(i)**2) 
                end do 
                mine=minval(distot) ; maxe=maxval(distot)
 
 
-    case(42) ; mine=1 ; maxe=nd
-    case(43) ; mine=1 ; maxe=nd
-    case(44) ; mine=1; maxe=maxval(nodeo(:nd)%icel)  !!>> HC 15-12-2021
+    case(44) ; mine=1 ; maxe=nd
+    case(45) ; mine=1 ; maxe=nd
+    case(46) ; mine=minval(fmeanl); maxe=maxval(fmeanl)  !!>> HC 15-12-2021
     end select
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !>>>Miguel30-10-14 
-    if(colorselection.gt.44)then
-      chogen=colorselection-44 
+    if(colorselection.gt.48)then
+      chogen=colorselection-48 
       mine=minval(gex(:nd,chogen)) ; maxe=maxval(gex(:nd,chogen))
       !print*,"chosen gene",chogen,"maxim",maxe,"minim",mine
     end if
+    if (leave_control==1) then ! >>> Is 4-7-24
+      chogen=gen_eleccio       ! >>> Is 4-7-24
+      mine=minval(gex(:nd,chogen)) ; maxe=maxval(gex(:nd,chogen))      
+    end if                     ! >>> Is 4-7-24
+
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   end if
 
@@ -2176,7 +2194,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
     case(25) ; amine=minval(node(:nd)%dif) ; amaxe=maxval(node(:nd)%dif)
     case(26) ; amine=minval(node(:nd)%kfi) ; amaxe=maxval(node(:nd)%kfi)
     case(27) ; amine=minval(node(:nd)%pla) ; amaxe=maxval(node(:nd)%pla)
-    case(28) ; amine=minval(node(:nd)%kvol) ; amaxe=maxval(node(:nd)%kvol)
+    case(28) ; amine=minval(node(:nd)%voc) ; amaxe=maxval(node(:nd)%voc)
     case(29) ; amine=1 ;amaxe=7 !amine=minval(node(:nd)%tipus) ; amaxe=maxval(node(:nd)%tipus) !this is tipus
     case(30) ; amine=minval(node(:nd)%icel) ; amaxe=maxval(node(:nd)%icel)
     case(31) ; amine=minval(node(:nd)%altre) ; amaxe=maxval(node(:nd)%altre)
@@ -2185,6 +2203,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
     case(34) ; amine=0;amaxe=1!minval(node(:nd)%fix) ; amaxe=maxval(node(:nd)%fix) 
     case(35) ; amine=minval(node(:nd)%ndiv) ; amaxe=maxval(node(:nd)%ndiv)   !!>> HC 16-3-2022
     case(36) ; mine=minval(discentch(:nd)) ; maxe=maxval(discentch(:nd))        !!>> HC 12-2-2024
+    case(37) ; mine=minval(cels(node(:nd)%icel)%fase) ; maxe=maxval(cels(node(:nd)%icel)%fase)        !!>>> Is 12-9-24    
     !case(36) ; if (chogen==0) then
     !           chogen=1
     !           amine=minval(gex(:nd,chogen)) ; amaxe=maxval(gex(:nd,chogen))
@@ -2211,24 +2230,24 @@ call glNewList(1_gluint,gl_compile_and_execute)
     !           end if
     !             amine=minval(gex(:nd,chogen)) ; amaxe=maxval(gex(:nd,chogen))
     !           end if
-    case(37) ; amine=0d0 ; amaxe=1d0
-    case(38) ; do i=1,nd ; disx(i)=node(i)%x-node(i)%orix ; end do 
+    case(38) ; amine=0d0 ; amaxe=1d0
+    case(39) ; do i=1,nd ; disx(i)=node(i)%x-node(i)%orix ; end do 
 
                amine=minval(disx) ; amaxe=maxval(disx)
-    case(39) ; do i=1,nd ; disy(i)=node(i)%y-node(i)%oriy ; end do 
+    case(40) ; do i=1,nd ; disy(i)=node(i)%y-node(i)%oriy ; end do 
                amine=minval(disy) ; amaxe=maxval(disy)
-    case(40) ; do i=1,nd ; disz(i)=node(i)%z-node(i)%oriz ; end do 
+    case(41) ; do i=1,nd ; disz(i)=node(i)%z-node(i)%oriz ; end do 
                amine=minval(disz) ; amaxe=maxval(disz)
-    case(41) ; do i=1,nd 
+    case(42) ; do i=1,nd 
                distot(i)=sqrt((node(i)%x-node(i)%orix)**2+(node(i)%y-node(i)%oriy)**2+(node(i)%z-node(i)%oriz)**2) 
                end do 
                amine=minval(distot) ; amaxe=maxval(distot)
-    case(42) ; amine=1 ; amaxe=nd
     case(43) ; amine=1 ; amaxe=nd
+    case(44) ; amine=1 ; amaxe=nd
     end select
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !>>>Miguel30-10-14 
     if(arrowselection.gt.43)then
-      achogen=arrowselection-43 
+      achogen=arrowselection-42 
       amine=minval(gex(:nd,achogen)) ; amaxe=maxval(gex(:nd,achogen))
       !print*,"chosen gene",chogen,"maxim",maxe,"minim",mine
     end if
@@ -2267,7 +2286,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
     case(25) ; smine=minval(node(:nd)%dif) ; smaxe=maxval(node(:nd)%dif)
     case(26) ; smine=minval(node(:nd)%kfi) ; smaxe=maxval(node(:nd)%kfi)
     case(27) ; smine=minval(node(:nd)%pla) ; smaxe=maxval(node(:nd)%pla)
-    case(28) ; smine=minval(node(:nd)%kvol) ; smaxe=maxval(node(:nd)%kvol)
+    case(28) ; smine=minval(node(:nd)%voc) ; smaxe=maxval(node(:nd)%voc)
     case(29) ; smine=1 ;smaxe=7 !smine=minval(node(:nd)%tipus) ; smaxe=maxval(node(:nd)%tipus) !this is tipus
     case(30) ; smine=minval(node(:nd)%icel) ; smaxe=maxval(node(:nd)%icel)
     case(31) ; smine=minval(node(:nd)%altre) ; smaxe=maxval(node(:nd)%altre)
@@ -2276,6 +2295,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
     case(34) ; smine=0;smaxe=1!minval(node(:nd)%fix) ; smaxe=maxval(node(:nd)%fix) 
     case(35) ; smine=minval(node(:nd)%ndiv) ; smaxe=maxval(node(:nd)%ndiv)   !!>> HC 16-3-2022
     case(36) ; mine=minval(discentch(:nd)) ; maxe=maxval(discentch(:nd))        !!>> HC 12-2-2024
+    case(37) ; mine=minval(cels(node(:nd)%icel)%fase) ; maxe=maxval(cels(node(:nd)%icel)%fase)        !!>>> Is 12-9-24    
     !case(36) ; if (chogen==0) then
     !           chogen=1
     !           smine=minval(gex(:nd,chogen)) ; smaxe=maxval(gex(:nd,chogen))
@@ -2302,23 +2322,23 @@ call glNewList(1_gluint,gl_compile_and_execute)
     !           end if
     !             smine=minval(gex(:nd,chogen)) ; smaxe=maxval(gex(:nd,chogen))
     !           end if
-    case(37) ; smine=0d0 ; smaxe=1d0
-    case(38) ; do i=1,nd ; disx(i)=node(i)%x-node(i)%orix ; end do 
+    case(38) ; smine=0d0 ; smaxe=1d0
+    case(39) ; do i=1,nd ; disx(i)=node(i)%x-node(i)%orix ; end do 
                smine=minval(disx) ; smaxe=maxval(disx)
-    case(39) ; do i=1,nd ; disy(i)=node(i)%y-node(i)%oriy ; end do 
+    case(40) ; do i=1,nd ; disy(i)=node(i)%y-node(i)%oriy ; end do 
                smine=minval(disy) ; smaxe=maxval(disy)
-    case(40) ; do i=1,nd ; disz(i)=node(i)%z-node(i)%oriz ; end do 
+    case(41) ; do i=1,nd ; disz(i)=node(i)%z-node(i)%oriz ; end do 
                smine=minval(disz) ; smaxe=maxval(disz)
-    case(41) ; do i=1,nd 
+    case(42) ; do i=1,nd 
                distot(i)=sqrt((node(i)%x-node(i)%orix)**2+(node(i)%y-node(i)%oriy)**2+(node(i)%z-node(i)%oriz)**2) 
                end do 
                smine=minval(distot) ; smaxe=maxval(distot)
-    case(42) ; smine=1 ; smaxe=nd
     case(43) ; smine=1 ; smaxe=nd
+    case(44) ; smine=1 ; smaxe=nd
     end select
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !>>>Miguel30-10-14 
     if(sphereselection.gt.43)then
-      schogen=sphereselection-43
+      schogen=sphereselection-43   ! >>> Is 2-9-24
       smine=minval(gex(:nd,schogen)) ; smaxe=maxval(gex(:nd,schogen))
       !print*,"chosen gene",chogen,"maxim",maxe,"minim",mine
     end if
@@ -2357,7 +2377,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
     case(25) ; a=node(i)%dif
     case(26) ; a=node(i)%kfi
     case(27) ; a=node(i)%pla
-    case(28) ; a=node(i)%kvol
+    case(28) ; a=node(i)%voc
     case(29) ; a=node(i)%tipus 
     case(30) ; a=node(i)%icel
     case(31) ; a=node(i)%altre
@@ -2369,6 +2389,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
     !case(36) ; a=gex(i,1)
     !case(37) ; a=gex(i,2)
     !case(38) ; a=gex(i,chogen)
+ !   case(37) ; a=ilastdiv(i) !WARNINS >>> Is 12-9-24    
     case(37) ; if(node(i)%tipus<4)then; a=cels(node(i)%icel)%fase ; else; a=0d0 ; end if !>>Miquel18-9-14
     case(38) ; a=disx(i)
     case(39) ; a=disy(i)
@@ -2377,10 +2398,17 @@ call glNewList(1_gluint,gl_compile_and_execute)
     case(42) ; a=real(boxes(nint(node(i)%x*urv),nint(node(i)%y*urv),nint(node(i)%z*urv)))	     
     case(43) ; a=i 
     case(44) ; a=nodeo(i)%icel                          !!>> HC 15-12-2021
+    case(45) ; a=ilastdiv(i)    
+    case(46) ; a=fmeanl(i)
     end select
-    if(colorselection.gt.44)then  !>>>Miguel30-10-14    !!>> HC 15-12-2021
-       a=gex(i,chogen)            !>>>Miguel30-10-14
-    end if                        !>>>Miguel30-10-14
+    if(colorselection.gt.48)then  !>>>Miguel30-10-14    !!>> HC 15-12-2021
+      a=gex(i,chogen)            !>>>Miguel30-10-14
+    end if 
+    if (leave_control==1) then ! >>> Is 4-7-24
+      chogen=gen_eleccio       ! >>> Is 4-7-24
+      a=gex(i,chogen)      
+    end if                     ! >>> Is 4-7-24
+   
     !MOD!!!!!!!!!!!!!!!!!!!!!!11
     !if(node(i)%tipus==3)then; a=node(i)%icel-19 ;end if
     !!!!!!!!!!!!!!!!!!!!!!!
@@ -2447,7 +2475,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
     case(25) ; a=node(i)%dif
     case(26) ; a=node(i)%kfi
     case(27) ; a=node(i)%pla
-    case(28) ; a=node(i)%kvol
+    case(28) ; a=node(i)%voc
     case(29) ; a=node(i)%tipus 
     case(30) ; a=node(i)%icel
     case(31) ; a=node(i)%altre
@@ -2459,7 +2487,8 @@ call glNewList(1_gluint,gl_compile_and_execute)
     !case(36) ; a=gex(i,1)
     !case(37) ; a=gex(i,2)
     !case(38) ; a=gex(i,chogen)
-    case(37) ; if(node(i)%tipus<4)then; a=cels(node(i)%icel)%fase ; else; a=0d0 ; end if !>>Miquel18-9-14
+!    case(37) ; if(node(i)%tipus<4)then; a=cels(node(i)%icel)%fase ; else; a=0d0 ; end if !>>Miquel18-9-14
+    case(37) ; if(node(i)%tipus<4)then; a=cels(node(i)%icel)%fase ; else; a=0d0 ; end if
     case(38) ; a=disx(i)
     case(39) ; a=disy(i)
     case(40) ; a=disz(i)
@@ -2504,7 +2533,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
     case(25) ; a=node(i)%dif
     case(26) ; a=node(i)%kfi
     case(27) ; a=node(i)%pla
-    case(28) ; a=node(i)%kvol
+    case(28) ; a=node(i)%voc
     case(29) ; a=node(i)%tipus 
     case(30) ; a=node(i)%icel
     case(31) ; a=node(i)%altre
@@ -2516,6 +2545,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
     !case(36) ; a=gex(i,1)
     !case(37) ; a=gex(i,2)
     !case(38) ; a=gex(i,chogen)
+    !case(37) ; a=ilastdiv(i) !WARNINS >>> Is 12-9-24    
     case(37) ; if(node(i)%tipus<4)then; a=cels(node(i)%icel)%fase ; else; a=0d0 ; end if !>>Miquel18-9-14
     case(38) ; a=disx(i)
     case(39) ; a=disy(i)
@@ -2722,7 +2752,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
                                                          &(flag(32)==1.and.node(ic)%tipus==4))then
                 if (aa>=mix.and.aa<=mx.and.bb>=miy.and.bb<=my.and.cc>=miz.and.cc<=mz) then
                   d=dneigh(i,j)
-                  if(d<node(i)%add+node(ic)%add)then     !>>>>>> Is 9-5-13
+                  !if(d<node(i)%add+node(ic)%add)then     !>>>>>> Is 9-5-13
                     if (flag(12)==1) then
                       if(node(i)%tipus==1)then;color=0;color(1)=1
                       else;color=0;color(2)=1;end if
@@ -2733,7 +2763,7 @@ call glNewList(1_gluint,gl_compile_and_execute)
                     call glMaterialfv(gl_front_and_back,gl_ambient_and_diffuse,color)
                     call glvertex3d(esca*a,esca*b,esca*c)
                     call glvertex3d(esca*aa,esca*bb,esca*cc)
-                  end if
+                  !end if
                 end if
               end if
             end if
@@ -2746,7 +2776,6 @@ call glNewList(1_gluint,gl_compile_and_execute)
   call glEnd
 
 
-  
   if(flag(37)==1)then !drawing the cell contours !>>Miquel29-8-14
     print*, "SORRY THIS FLAG IS DISABLED IN THIS VERSION DUE TO RAM MEMORY ISSUES" !!>> HC 18-8-21
   end if
@@ -3783,8 +3812,8 @@ end subroutine
 !*******************************************SUBROUTINE********************************************************
 subroutine menuq_handler(selection)
 integer(kind=glint), value :: selection
-integer i
-
+!integer i
+real*8 i !!AL 20-5-25>> if we use real time this variables should be floats
 if (selection==-1) then
   print *,"how many?"
   read(*,*) i
@@ -3969,6 +3998,7 @@ real*8 :: guardaene
         print*,"cell",node(ki)%icel
         print *,node(ki)%altre,"altre"
         node(ki)%e=guardaene
+        print *,fmeanl(ki),"fmeanl"
         print*,"gene expression"
         print*,gex(ki,1:ng)
         !print *,"node properties"
@@ -4366,7 +4396,7 @@ subroutine get_color_max_min(selection,mine,maxe,chogen)
  integer, intent(in):: selection
  real*8, intent(out)::mine,maxe
  integer,intent(out)::chogen
-real*8         :: disx(nd),disy(nd),disz(nd),distot(nd), discentch(nd)
+ real*8         :: disx(nd),disy(nd),disz(nd),distot(nd), discentch(nd)
 
   do i=1,nd                                                                      !!>> HC 12-2-2024
      discentch(i)=(sqrt( (node(i)%x)**2 + (node(i)%y)**2 + (node(i)%z)**2))**2   !!>> HC 12-2-2024
@@ -4402,7 +4432,7 @@ real*8         :: disx(nd),disy(nd),disz(nd),distot(nd), discentch(nd)
     case(25) ; mine=minval(node(:nd)%dif) ; maxe=maxval(node(:nd)%dif)
     case(26) ; mine=minval(node(:nd)%kfi) ; maxe=maxval(node(:nd)%kfi)
     case(27) ; mine=minval(node(:nd)%pla) ; maxe=maxval(node(:nd)%pla)
-    case(28) ; mine=minval(node(:nd)%kvol) ; maxe=maxval(node(:nd)%kvol)
+    case(28) ; mine=minval(node(:nd)%voc) ; maxe=maxval(node(:nd)%voc)
     case(29) ; mine=1 ;maxe=7 !mine=minval(node(:nd)%tipus) ; maxe=maxval(node(:nd)%tipus) !this is tipus
     case(30) ; mine=minval(node(:nd)%icel) ; maxe=maxval(node(:nd)%icel)
     case(31) ; mine=minval(node(:nd)%altre) ; maxe=maxval(node(:nd)%altre)
@@ -4454,8 +4484,8 @@ real*8         :: disx(nd),disy(nd),disz(nd),distot(nd), discentch(nd)
     case(44) ; mine=1; maxe=maxval(nodeo(:nd)%icel)  !!>> HC 11-1-2021
     end select
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !>>>Miguel30-10-14 
-    if(selection.gt.44)then                          !!>> HC 11-1-2021
-      chogen=selection-44                            !!>> HC 11-1-2021
+    if(selection.gt.46)then                          !!>> HC 11-1-2021
+      chogen=selection-46                            !!>> HC 11-1-2021 !!>>AL 10-10-2024
       mine=minval(gex(:nd,chogen)) ; maxe=maxval(gex(:nd,chogen))
       !print*,"chosen gene",chogen,"maxim",maxe,"minim",mine
     end if
@@ -4953,7 +4983,7 @@ case(23); node(nodetarget)%vod=tempnod%vod
 case(24); node(nodetarget)%dif=tempnod%dif
 case(25); node(nodetarget)%kfi=tempnod%kfi
 case(26); node(nodetarget)%pla=tempnod%pla
-case(27); node(nodetarget)%kvol=tempnod%kvol
+case(27); node(nodetarget)%voc=tempnod%voc
 !case(29); node(nodetarget)%temt=tempnod%temt
 case(28); node(nodetarget)%tipus=tempnod%tipus
 case(29); node(nodetarget)%icel=tempnod%icel
@@ -5294,11 +5324,11 @@ case(27)
          node(nodeindex)%pla=temp
          nodeo(nodeindex)%pla=temp
 case(28) 
-         print*,"The ",nodeparams(selection)," of the node is", node(nodeindex)%kvol
+         print*,"The ",nodeparams(selection)," of the node is", node(nodeindex)%voc
 	 print*,"Please give new tipus for the selected node"
          read(*,*) temp
-         node(nodeindex)%kvol=temp
-         nodeo(nodeindex)%kvol=temp
+         node(nodeindex)%voc=temp
+         nodeo(nodeindex)%voc=temp
 case(29)
          print*,"The ",nodeparams(selection)," of the node is", node(nodeindex)%tipus
 	 print*,"Please give new tipus for the selected node"
@@ -5438,9 +5468,12 @@ subroutine menus_handler(selection)
 integer(kind=glint), value :: selection
 character*300 nofi
 character*300 crida
+integer ngm
 
 select case(selection)
 case(1) ! save present time
+  escriu_pattern=1 ! >>> Is 4-7-24
+  escriu_dm=1      ! >>> Is 4-7-24
   call writesnap
 case(2) ! make snaps
   if (fsnap==1) then ; fsnap=0 ; else ; fsnap=1 ; end if
@@ -5493,8 +5526,39 @@ case(12)
   print *,"WARNING THE MAIN WINDOW NEEDS TO BE VISIBLE" 
   print *,""
 !>>> Is 24-10-14
+
+!>>> Is 4-7-24
+case(13) ! save present time
+  escriu_pattern=0 ! >>> Is 4-7-24
+  escriu_dm=1      ! >>> Is 4-7-24
+  print *,"print the text that will be added in the front of each output file"
+  read(*,*) label
+  flabel=1
+  call writesnap
+case(14) ! 
+  escriu_pattern=1 ! >>> Is 4-7-24
+  escriu_dm=0      ! >>> Is 4-7-24
+  print *,"print the text that will be added in the front of each output file"
+  read(*,*) label
+  flabel=1
+  call writesnap
+case(15)
+  ngm=ng
+  print *,"until which gene do you want to save"
+  read(*,*) ng
+  escriu_pattern=1 ! >>> Is 4-7-24
+  escriu_dm=0      ! >>> Is 4-7-24
+  print *,"print the text that will be added in the front of each output file"
+  read(*,*) label
+  flabel=1
+  call writesnap
+  ng=ngm  
+!>>> Is 4-7-24  
 end select
 end subroutine
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 subroutine menuse_handler(selection)
 integer(kind=glint), value :: selection
@@ -5749,8 +5813,9 @@ nu=1 !Tommi 1.8.2013
   call glutAddMenuEntry("nodes fixed as yellow"//char(0),34)
   call glutAddMenuEntry("Number of divisions"//char(0),35)
   call glutAddMenuEntry("sq distance center"//char(0),36)                              !!>> HC 15-12-2021
+  call glutAddMenuEntry("cell phase"//char(0),37)                              !!>>> Is 12-9-24 
 
-  nu=nparam_per_node+1
+  nu=nparam_per_node+2
   call glutAddMenuEntry("as cell cycle"//char(0),nu+1)
   call glutAddMenuEntry("as dx"//char(0),nu+2)
   call glutAddMenuEntry("as dy"//char(0),nu+3)
@@ -5758,11 +5823,12 @@ nu=1 !Tommi 1.8.2013
   call glutAddMenuEntry("as dtotal"//char(0),nu+5)
   call glutAddMenuEntry("as boxes"//char(0),nu+6)
   call glutAddMenuEntry("as node index"//char(0),nu+7)!>>>>>Tommi 5.8.2013
-  call glutAddMenuEntry("cell lineage"//char(0),nu+8)                              !!>> HC 15-12-2021
+  call glutAddMenuEntry("time since last division"//char(0),nu+8)                     
+  call glutAddMenuEntry("inverted compression, fmeanl"//char(0),nu+9)                     
   do i=1,ng						!>>>Miguel30-10-14
     write(genetitle,*)'Amount of regulatory molecule',i  !>>>Miguel30-10-14
     genetitle=adjustl(genetitle)				!>>>Miguel30-10-14
-    call glutAddMenuEntry(genetitle(1:44)//char(0),nu+8+i) !>>>Miguel30-10-14      !!>> HC 15-12-2021
+    call glutAddMenuEntry(genetitle(1:44)//char(0),nu+9+i) !>>>Miguel30-10-14      !!>> HC 15-12-2021
   end do                                                 !>>>Miguel30-10-14 
 !!!!!!!!!!!
 
@@ -5959,6 +6025,10 @@ call glutAddMenuEntry("add label to the name of the output file"//char(0),5)
 !call glutAddMenuEntry("save into gif or alike (it can be changed)"//char(0),11)
 call glutAddMenuEntry("save images automatically (the window must be open and uncovered)"//char(0),10) !>>> is 24-10-14
 call glutAddMenuEntry("save movie, check terminal (the window must be open and uncovered)"//char(0),12)
+call glutAddMenuEntry("save developmental mechanism only"//char(0),13)  ! >>> Is 4-7-34
+call glutAddMenuEntry("save present developmental pattern"//char(0),14) ! >>> Is 4-7-34
+call glutAddMenuEntry("save present developmental pattern but with fewer genes"//char(0),15) ! >>> Is 4-7-34
+call glutAddMenuEntry("save present developmental pattern but with more genes"//char(0),16)  ! >>> Is 4-7-34
 
 !menuse = glutCreateMenu(menuse_handler)
 !call glutAddMenuEntry("make 2D plot in the minimal x plane"//char(0),1)

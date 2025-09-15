@@ -458,8 +458,8 @@ integer :: itt, mitt
 300   nuve=nuve+1
 
       if (nuve>mnn) then; 
-        print *,"PANIC!!! PANIC!!!PANIC!!!; this is going to crash because there is too many " ; 
-        print *,"neighbors per a node to interact, and vuvx matrix and those are too small"
+        !print *,"PANIC!!! PANIC!!!PANIC!!!; this is going to crash because there is too many " ; 
+        !print *,"neighbors per a node to interact, and vuvx matrix and those are too small"
         if (ffu(21)==1)then                                       !!>> HC 17-11-2020 We filter individuals that have too many neighbors
            if (ffufi(2,1)==1.and.ffufi(2,3)>0)then                !!>> HC 20-2-2021
               if (mod(getot,ffufi(2,3)).eq.0)then                 !!>> HC 20-2-2021   
@@ -520,7 +520,7 @@ integer :: itt, mitt
            rcilx(ic)=rcilx(ic)-f*uvx ; rcily(ic)=rcily(ic)-f*uvy ; rcilz(ic)=rcilz(ic)-f*uvz  !>>>Miquel 4-4-14
         endif                                  !!>> HC 15-6-2020
                    
-        if (ffu(9)==1) then  ! 4-3-2020
+        if (ffu(9)==1) then  ! >>> Is 20-9-24 ! 4-3-2020
           fmeanl(nod)=fmeanl(nod)+(fd-deqe) ; fmeanl(ic)=fmeanl(ic)+(fd-deqe) ! >>> Is 21-6-14 
         else
           fmeanl(nod)=fmeanl(nod)+f ; fmeanl(ic)=fmeanl(ic)+f ! >>> ! 4-3-2020 aixo es una mica mes correcte       
@@ -742,7 +742,7 @@ integer :: itt, mitt
   arcilxch=0d0; arcilych=0d0; arcilzch=0d0 !!>> HC 15-6-2020
   rrcilxch=0d0; rrcilych=0d0; rrcilzch=0d0 !!>> HC 15-6-2020
   epinveins=0
-  
+
   do nod=1,nd
     !lonely=0 !fossile? >>Miquel27-2-14
 
@@ -946,8 +946,8 @@ integer :: itt, mitt
 300   nuve=nuve+1
 
       if (nuve>mnn) then; 
-        print *,"PANIC!!! PANIC!!!PANIC!!!; this is going to crash because there is too many " ; 
-        print *,"neighbors per a node to interact, and vuvx matrix and those are too small"
+        !print *,"PANIC!!! PANIC!!!PANIC!!!; this is going to crash because there is too many " ; 
+        !print *,"neighbors per a node to interact, and vuvx matrix and those are too small"
         if (ffu(21)==1)then                                       !!>> HC 17-11-2020 We filter individuals that have too many neighbors
            if (ffufi(2,1)==1.and.ffufi(2,3)>0)then                !!>> HC 20-2-2021
               if (mod(getot,ffufi(2,3)).eq.0)then                 !!>> HC 20-2-2021   
@@ -1008,7 +1008,7 @@ integer :: itt, mitt
            rcilx(ic)=rcilx(ic)-f*uvx ; rcily(ic)=rcily(ic)-f*uvy ; rcilz(ic)=rcilz(ic)-f*uvz  !>>>Miquel 4-4-14
         endif                                  !!>> HC 15-6-2020
                    
-        if (ffu(9)==1) then  ! 4-3-2020
+        if (ffu(9)==1) then  ! >>> Is 20-9-24 ! 4-3-2020
           fmeanl(nod)=fmeanl(nod)+(fd-deqe) ; fmeanl(ic)=fmeanl(ic)+(fd-deqe) ! >>> Is 21-6-14 
         else
           fmeanl(nod)=fmeanl(nod)+f ; fmeanl(ic)=fmeanl(ic)+f ! >>> ! 4-3-2020 aixo es una mica mes correcte       

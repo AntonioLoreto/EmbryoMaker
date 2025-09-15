@@ -34,7 +34,7 @@ real*8 sumfinch                 !!>> HC 11-2-2021
 
 sumfinch=0.0d0; finch=0.0d0     !!>> HC 11-2-2021
 
-if (ffu(25)==1)then                                                                                    !!>> HC 11-2-2021
+if (ffu(25)==0)then                                                                                    !!>> HC 11-2-2021
    do ick=1,ncels
       s=0.0d0
       ii=cels(ick)%node(1)
@@ -67,7 +67,7 @@ if (ffu(25)==1)then                                                             
                   call random_number(a)                                                                !!>> HC 14-9-2021
                   cels(ick)%fase=a*newfase                                                             !!>> HC 14-9-2021 new fase is a random between 0 and newfase for the new cells
                   call random_number(a)                                                                !!>> HC 14-9-2021 so that clones do not syncrhonize divisions
-                  cels(ncels)%fase=a*newfase                                                           !!>> HC 14-9-2021
+                  cels(ncels)%fase=a*newfase                                                           !!>> HC 14-9-2021                  
                   tipi = cels(ick)%ctipus !>> HC 29-05-2020 Update the grid for epithelial cells       !!>> HC 2-11-2022
                endif                                                                                   !!>> HC 2-11-2022
             else                                                                                       !!>> HC 2-11-2022
@@ -161,7 +161,34 @@ end subroutine should_I_divide_single
 
 !**************************************************************************************************
 
-subroutine division_single_node(celd)   ! IMPORTANT, THIS IMPLIES AN INELUDIBLE BIAS IF THE INITIAL CONDITIONS ARE REGULAR SINCE THE NEW CELL HAS TO ARISE IN A SPECIFIC DIRECTION
+subroutine division_single_node(celd)   !>>> Is 7-8-24
+  integer celd,i,ii !>>> Is 12-9-24
+    if (ffu(30)==0) then
+      if (ffu(31)==1) then
+        !that is the version before 9-8-24
+        call division_single_node_asim_hertwig_noad(celd)
+      else
+        call division_single_node_equal_herwitg_ad(celd)
+      end if
+    else
+      print *,"not implemented yet"
+      stop
+    end if   
+
+    !>>> Is 12-9-24
+      i=cels(celd)%node(1)
+      ilastdiv(i)=0
+      ilastdiv(nd)=0
+      ilastdiv(nd-1)=0
+      ilastdiv(node(i)%altre)=0    
+    !<<< Is 12-9-24
+end subroutine
+
+!**************************************************************************************************
+
+subroutine division_single_node_asim_hertwig_noad(celd)
+! THAT IS THE original legacy version. There is a mother cell and a small (reqmin) daugther cell split into a hertwig direction
+! both the eqd and add of the original cell are small
 integer::celd,nnod,tipi,nnoda,nnodb,i,j,k,ii,jj,kk,epivei
 real*8::a,b,c,d,ax,ay,az,bx,by,bz,cx,cy,cz,dotp,ix,iy,iz,nodda
 integer,dimension(:)::nodea(cels(celd)%nunodes),nodeb(cels(celd)%nunodes)
@@ -193,7 +220,7 @@ integer,dimension(:)::nodea(cels(celd)%nunodes),nodeb(cels(celd)%nunodes)
           end do
         end if
       end do
-      if (ffu(9)==0) then        !4-3-2020
+      if (ffu(9)/=1) then !if (ffu(9)/=1) then ! WARNING Is >>> 20-9-24        !4-3-2020
         if(epivei<2)then         !4-3-2020
           call random_number(bx) !4-3-2020
           call random_number(by) !4-3-2020
@@ -207,7 +234,6 @@ integer,dimension(:)::nodea(cels(celd)%nunodes),nodeb(cels(celd)%nunodes)
       call random_number(bz)
       aa=sqrt(bx**2+by**2+bz**2)
     end if
-
     d=1/aa
     bx=bx*d ; by=by*d ; bz=bz*d
     jj=node(ii)%altre
@@ -244,7 +270,6 @@ integer,dimension(:)::nodea(cels(celd)%nunodes),nodeb(cels(celd)%nunodes)
     end if
     cels(celd)%hpolx=bx ; cels(celd)%hpoly=by ; cels(celd)%hpolz=bz    !physical vector
   end if
-  
  if (ffu(19)==0) then   !!!!! HC 1-05-2020  With this ffu = 1 the polarization and the directed division
 			   !!!!! HC 1-05-2020  are both controlled by the nparam_per_node+8
     d=0.0d0
@@ -266,7 +291,7 @@ integer,dimension(:)::nodea(cels(celd)%nunodes),nodeb(cels(celd)%nunodes)
           d=d+gex(ii,k)*gen(k)%e(nparam_per_node+11) !this is the differential of growth for the node
        end if
     end do
- endif                                                                                                   !!!!! HC 1-05-2020
+ endif      
   d=1d0/(1d0+d)  !ponderacion entre vector fisico i quimico
  !print*,"d ponderation",d,node(nd)%tipus
   !d=0d0                                 
@@ -294,14 +319,13 @@ integer,dimension(:)::nodea(cels(celd)%nunodes),nodeb(cels(celd)%nunodes)
     nnodb=1
     nnoda=1
   end if
-
   call addanode(ii)
   node(nd)%icel=ncels
 !  node(nd)%icel=ncels!pfh17-3-15
-
   node(nd)%x=node(ii)%x+desmax*cx ; node(nd)%y=node(ii)%y+desmax*cy ; node(nd)%z=node(ii)%z+desmax*cz
- !print *,cx,cy,cz,cels(celd)%polx,cels(celd)%poly,cels(celd)%polz,"koop",desmax
-!  node(nd)%marge=node(ii)%marge !>>> Is 1-15
+  if (ffu(29)==0) then
+    node(ii)%x=node(ii)%x-desmax*cx ; node(ii)%y=node(ii)%y-desmax*cy ; node(ii)%z=node(ii)%z-desmax*cz  
+  end if
   nodeo(nd)%x=node(nd)%x ; nodeo(nd)%y=node(nd)%y ; nodeo(nd)%z=node(nd)%z !pfh18-3-15 
 
   if (ffu(18)==0) then         !>>> Is 18-4-15   !!>> HC 25-8-2021
@@ -315,6 +339,10 @@ integer,dimension(:)::nodea(cels(celd)%nunodes),nodeb(cels(celd)%nunodes)
   if(tipi<3)then
     node(nd-1)%icel=ncels
     node(nd-1)%x=node(jj)%x+desmax*cx ; node(nd-1)%y=node(jj)%y+desmax*cy ; node(nd-1)%z=node(jj)%z+desmax*cz
+    if (ffu(29)==0) then
+      jj=node(ii)%altre
+      node(jj)%x=node(jj)%x-desmax*cx ; node(jj)%y=node(jj)%y-desmax*cy ; node(jj)%z=node(jj)%z-desmax*cz    
+    end if
     node(ii)%ndiv=node(ii)%ndiv+1                            !!>> HC 16-3-2022
     node(node(ii)%altre)%ndiv=node(node(ii)%altre)%ndiv+1    !!>> HC 16-3-2022
     node(nd)%ndiv=node(ii)%ndiv                              !!>> HC 12-1-2023
@@ -362,13 +390,231 @@ integer,dimension(:)::nodea(cels(celd)%nunodes),nodeb(cels(celd)%nunodes)
   cels(ncels)%temt=cels(celd)%temt			!pfh-17-3-15
 
   if (ncels>=ncals) call recels
+
+end subroutine
+
+!**************************************************************************************************
+
+subroutine division_single_node_equal_herwitg_ad(celd)   !>>> Is 9-8-24
+! both daugther cells have the same size and we can of of apply Hertwig rule
+! BOTH DAUGHTER CELLS HAVE the original ADD but a reqmin eqd.
+! IMPORTANT, THIS IMPLIES AN INELUDIBLE BIAS IF THE INITIAL CONDITIONS ARE REGULAR SINCE THE NEW CELL HAS TO ARISE IN A SPECIFIC DIRECTION
+! WARNING NOT TESTED WITH MESENCHYME
+integer::celd,nnod,tipi,nnoda,nnodb,i,j,k,ii,jj,kk,epivei,kjjj,jkkk
+real*8::a,b,c,d,ax,ay,az,bx,by,bz,cx,cy,cz,dotp,ix,iy,iz,nodda,adhe,proj,aa
+integer,dimension(:)::nodea(cels(celd)%nunodes),nodeb(cels(celd)%nunodes)
+
+  ii=cels(celd)%node(1) !the node
+  tipi=node(ii)%tipus
+  nodda=node(ii)%add
+  !determining the physicial division plane (in relation with the neighboring cells) Hertwig rule
+  !just taking the longest vector connecting two of its neighbors
+      ! >>> Is 7-8-24
+    ! HERE WE ASSUME THAT THE DIRECTION OF CELL DIVISION IS PERPENDICULAR TO THE LINE OF MAXIMAL CELL ADHESION
+    adhe=0
+    bx=0.0d0 ; by=0.0d0 ; bz=0.0d0
+      aa=0
+      bx=0;by=0;bz=0
+      if(nneigh(ii)>2)then !>>Miquel20-3-15
+        epivei=0
+        do i=1,nneigh(ii)
+          jj=neigh(ii,i)
+          if (node(ii)%altre==jj) cycle
+          if(node(jj)%tipus==tipi)then
+            adhe=0
+            if (npag(1)>0) then                  !>> HC 12-6-2020! we have adhesion molecules
+              do j=1,npag(1)                     !>> HC 12-6-2020
+                k=whonpag(1,j)                   !>> HC 12-6-2020
+                do kjjj=1,npag(1)                !>> HC 12-6-2020
+                  jkkk=whonpag(1,kjjj)           !>> HC 12-6-2020
+                  adhe=adhe+gex(jj,k)*gex(ii,jkkk)*kadh(int(gen(k)%e(1)),int(gen(jkkk)%e(1))) ! >>> Is 7-6-14    !this is specific adhesion             !>> HC 12-6-2020
+                end do                           !>> HC 12-6-2020
+              end do                             !>> HC 12-6-2020
+            end if                               !>> HC 12-6-2020
+            a=node(jj)%x-node(ii)%x ; b=node(jj)%y-node(ii)%y ; c=node(jj)%z-node(ii)%z
+            d=sqrt(a**2+b**2+c**2)
+            d=adhe/d
+            bx=bx+a*d ; by=by+b*d ; bz=bz+c*d
+          end if
+        end do
+        aa=sqrt(bx**2+by**2+bz**2)        
+        if (aa==0.0d0) then ! xapussa, a canviar si aixo funciona, es per quan no hi ha adhesio
+          call random_number(bx)
+          call random_number(by)
+          call random_number(bz)  
+          aa=sqrt(bx**2+by**2+bz**2)          
+        else
+          d=1.0d0/aa
+          bx=bx*d ; by=by*d ; bz=bz*d
+          ! aqui fem la projeccio al pla del epiteli pq sino augmenta soroll
+          jj=node(ii)%altre
+
+          ! cylinder axis vector
+          ax=node(ii)%x-node(jj)%x ; ay=node(ii)%y-node(jj)%y ; az=node(ii)%z-node(jj)%z
+          d=1.0d0/sqrt(ax**2+ay**2+az**2)
+          ax=ax*d;ay=ay*d;az=az*d
+          ! projection of the division vector into the axis vector
+          proj=abs(bx*ax+by*ay+bz*az)  ! a is unitary so its modulus is 1
+          ax=ax*proj ; ay=ay*proj ; az=az*proj !this is the projection vector because the vectors are all unitary
+          bx=bx-ax ; by=by-ay ; bz=bz-az
+                 
+          ! ara trobem el vector perpendicular al de la mitja ponderada, ho fem fent el producte vectorial amb
+          ! el vector axial del cilindre ii
+          cx=bx ; cy=by ; cz=bz
+          bx=ay*cz-az*cy ; by=az*cx-ax*cz ; bz=ax*cy-ay*cx 
+          aa=sqrt(bx**2+by**2+bz**2)        
+          d=1.0d0/aa
+          bx=bx*d ; by=by*d ; bz=bz*d
+        end if
+      else
+        call random_number(bx)
+        call random_number(by)
+        call random_number(bz)
+      end if
+
+      jj=node(ii)%altre
+!      ax=node(jj)%x-node(ii)%x ; ay=node(jj)%y-node(ii)%y ; az=node(jj)%z-node(ii)%z
+!      d=1/sqrt(ax**2+ay**2+az**2)
+!      ax=ax*d;ay=ay*d;az=az*d
+!      dotp=ax*bx+ay*by+az*bz
+!      cels(celd)%hpolx=bx-ax*dotp ; cels(celd)%hpoly=by-ay*dotp ; cels(celd)%hpolz=bz-az*dotp    !physical vector
+      cels(celd)%hpolx=bx ; cels(celd)%hpoly=by ; cels(celd)%hpolz=bz    !physical vector
+    ! <<< Is 7-8-24
+ 
   
-end subroutine division_single_node
+ if (ffu(19)==0) then   !!!!! HC 1-05-2020  With this ffu = 1 the polarization and the directed division
+			   !!!!! HC 1-05-2020  are both controlled by the nparam_per_node+8
+    d=0.0d0
+    do j=1,npag(nparam_per_node+8)    !number of genes affecting growth                                            !!!!! HC 1-05-2020
+       k=whonpag(nparam_per_node+8,j)  !which are those genes                                                      !!!!! HC 1-05-2020
+       if (tipi<3)then                                                                                             !!!!! HC 1-05-2020
+          d=d+(gex(ii,k)+gex(jj,k))*gen(k)%e(nparam_per_node+8) !this is the differential of growth for the node   !!!!! HC 1-05-2020        
+       else                                                                                                        !!!!! HC 1-05-2020
+          d=d+gex(ii,k)*gen(k)%e(nparam_per_node+8) !this is the differential of growth for the node               !!!!! HC 1-05-2020
+       end if                                                                                                      !!!!! HC 1-05-2020
+    end do                                                                                                         !!!!! HC 1-05-2020
+ else                                                                                                              !!!!! HC 1-05-2020
+    d=0.0d0                                                                                         
+    do j=1,npag(nparam_per_node+11)    !number of genes affecting growth                            
+       k=whonpag(nparam_per_node+11,j)  !which are those genes
+       if (tipi<3)then
+          d=d+(gex(ii,k)+gex(jj,k))*gen(k)%e(nparam_per_node+11) !this is the differential of growth for the node
+       else
+          d=d+gex(ii,k)*gen(k)%e(nparam_per_node+11) !this is the differential of growth for the node
+       end if
+    end do
+ endif                                                                                                   !!!!! HC 1-05-2020
+  d=1d0/(1d0+d)  !ponderacion entre vector fisico i quimico
+  cx=((1-d)*cels(celd)%polx)+(d*cels(celd)%hpolx)   !vector resultante para division
+  cy=((1-d)*cels(celd)%poly)+(d*cels(celd)%hpoly)
+  cz=((1-d)*cels(celd)%polz)+(d*cels(celd)%hpolz)
+  cx=bx ; cy=by ; cz=bz
+  ncels=ncels+1
+  if(tipi<3)then
+    ndepi=ndepi+2
+    nd=nd+2
+    nnodb=2
+    nnoda=2
+  else
+    ndmes=ndmes+1
+    nd=nd+1
+    nnodb=1
+    nnoda=1
+  end if
+
+  call addanode(ii)
+  node(nd)%icel=ncels
+!  node(nd)%icel=ncels!pfh17-3-15
+  node(nd)%x=node(ii)%x+desmax*cx ; node(nd)%y=node(ii)%y+desmax*cy ; node(nd)%z=node(ii)%z+desmax*cz
+  if (ffu(29)==0) then
+    node(ii)%x=node(ii)%x-desmax*cx ; node(ii)%y=node(ii)%y-desmax*cy ; node(ii)%z=node(ii)%z-desmax*cz  
+  end if
+!  node(nd)%marge=node(ii)%marge !>>> Is 1-15
+  nodeo(nd)%x=node(nd)%x ; nodeo(nd)%y=node(nd)%y ; nodeo(nd)%z=node(nd)%z !pfh18-3-15 
+!  nodeo(ii)%x=node(ii)%x ; nodeo(ii)%y=node(ii)%y ; nodeo(ii)%z=node(ii)%z !pfh18-3-15 
+
+  if (ffu(18)==0) then         !>>> Is 18-4-15   !!>> HC 25-8-2021
+!    node(nd)%grd=node(ii)%grd !>>> Is 18-4-15   !!>> HC 25-8-2021 
+!  else                        !>>> Is 18-4-15   !!>> HC 25-8-2021
+!>>> Is 6-8-2
+      node(nd)%eqd=reqmin        !>>> Is 18-4-15   !!>> HC 25-8-2021 EQD starts small
+      node(nd)%add=node(ii)%add ! >>> Is 6-8-24 -node(ii)%eqd
+      node(ii)%eqd=reqmin        !>>> Is 18-4-15   !!>> HC 25-8-2021 EQD starts small
+      node(node(nd)%altre)%eqd=reqmin        !>>> Is 18-4-15   !!>> HC 25-8-2021 EQD starts small
+      node(node(nd)%altre)%add=node(node(ii)%altre)%add ! >>> Is 6-8-24 -node(ii)%eqd
+      node(node(ii)%altre)%eqd=reqmin        !>>> Is 18-4-15   !!>> HC 25-8-2021 EQD starts small       
+!<<< Is 6-8-24
+  end if                       !>>> Is 18-4-15   !!>> HC 25-8-2021
+
+  if (prop_noise==0d0) node(nd)%e=0d0 !pfh 20-3-15
+  if(tipi<3)then
+    node(nd-1)%icel=ncels
+    node(nd-1)%x=node(jj)%x+desmax*cx ; node(nd-1)%y=node(jj)%y+desmax*cy ; node(nd-1)%z=node(jj)%z+desmax*cz
+    if (ffu(29)==0) then
+      node(jj)%x=node(jj)%x-desmax*cx ; node(jj)%y=node(jj)%y-desmax*cy ; node(jj)%z=node(jj)%z-desmax*cz    
+    end if
+    node(ii)%ndiv=node(ii)%ndiv+1                            !!>> HC 16-3-2022
+    node(node(ii)%altre)%ndiv=node(node(ii)%altre)%ndiv+1    !!>> HC 16-3-2022
+    node(nd)%ndiv=node(ii)%ndiv                              !!>> HC 12-1-2023
+    node(nd-1)%ndiv=node(node(ii)%altre)%ndiv                 !!>> HC 12-1-2023
+    if (ffu(18)==0) then           !>>> Is 18-4-15  !!>> HC 25-8-2021
+      node(nd)%eqd=reqmin        !>>> Is 18-4-15   !!>> HC 25-8-2021 EQD starts small
+      node(nd)%add=node(ii)%add ! >>> Is 6-8-24 -node(ii)%eqd
+      node(ii)%eqd=reqmin        !>>> Is 18-4-15   !!>> HC 25-8-2021 EQD starts small
+      node(node(nd)%altre)%eqd=reqmin        !>>> Is 18-4-15   !!>> HC 25-8-2021 EQD starts small
+      node(node(nd)%altre)%add=node(node(ii)%altre)%add ! >>> Is 6-8-24 -node(ii)%eqd
+      node(node(ii)%altre)%eqd=reqmin        !>>> Is 18-4-15   !!>> HC 25-8-2021 EQD starts small    
+      !node(nd-1)%eqd=reqmin       !<<< Is 6-8-24 !>>> Is 18-4-15  !!>> HC 25-8-2021 EQD starts small
+      !node(nd-1)%add=reqmin+node(node(ii)%altre)%add-node(node(ii)%altre)%eqd !<<< Is 6-8-24
+    end if                         !>>> Is 18-4-15  !!>> HC 25-8-2021
+    node(nd)%marge=node(ii)%marge                   !!>> HC 17-11-2021 if you are an epithelial cell only one of the nodes
+    node(nd-1)%marge=node(node(ii)%altre)%marge     !!>> HC 17-11-2021 will inherit the nucleus
+    nodeo(nd-1)%x=node(nd-1)%x ; nodeo(nd-1)%y=node(nd-1)%y ; nodeo(nd-1)%z=node(nd-1)%z !pfh18-3-15
+    nodeo(jj)%x=node(jj)%x ; nodeo(jj)%y=node(jj)%y ; nodeo(jj)%z=node(jj)%z !pfh18-3-15    
+    if (prop_noise==0d0) node(nd-1)%e=0d0  !pfh 20-3-15
+  else
+    node(nd)%marge=0
+    node(ii)%ndiv=node(ii)%ndiv+1                            !!>> HC 16-3-2022
+    node(nd)%ndiv=0                                          !!>> HC 16-3-2022
+  end if
+  !cels(celd)%nunodes=nnoda
+  cels(ncels)%nunodes=nnodb
+  !deallocate(cels(celd)%node)
+  !cels(celd)%nodela=nnoda+10
+  cels(ncels)%nodela=nnodb
+  allocate(cels(ncels)%node(nnodb))
+  cels(celd)%nunodes=nnoda
+  cels(celd)%node(:)=0
+  cels(celd)%node(1)=ii
+
+  cels(ncels)%node(:)=0
+  cels(ncels)%node(1)=nd
+
+  cels(ncels)%hpolx=0 ; cels(ncels)%hpoly=0 ; cels(ncels)%hpolz=0  !>>Miquel12-9-14
+  cels(ncels)%polx=0 ; cels(ncels)%poly=0 ; cels(ncels)%polz=0     !>>Miquel12-9-14
+
+  if(tipi<3)then
+    cels(celd)%node(2)=node(ii)%altre
+    cels(ncels)%node(2)=nd-1
+    cels(ncels)%cex=node(nd-1)%x ; cels(ncels)%cey=node(nd-1)%y ; cels(ncels)%cez=node(nd-1)%z
+  else
+    cels(ncels)%cex=node(nd)%x ; cels(ncels)%cey=node(nd)%y ; cels(ncels)%cez=node(nd)%z
+  end if
+  cels(ncels)%ctipus=cels(celd)%ctipus
+  cels(ncels)%maxsize_for_div=cels(celd)%maxsize_for_div!pfh-17-3-15
+  cels(ncels)%minsize_for_div=cels(celd)%minsize_for_div!pfh-17-3-15
+  cels(ncels)%temt=cels(celd)%temt			!pfh-17-3-15
+
+  if (ncels>=ncals) call recels
+!print *,nd,celd,"celd"
+!read(*,*)  
+end subroutine ! >>> Is 7-8-24
+
 
 !***************************************************************************************
 
 subroutine polarization_single
-  if (ffu(9)==0) then
+  if (ffu(9)/=1) then  ! >>> Is 20-9-24
     call polarization_single_new
   else
     call polarization_single_old ! 2016 version (with some little bug)

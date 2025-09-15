@@ -3,7 +3,6 @@
 ! fitness is OPC value - 10* average EMD !!>> HC 26-11-12020
 
 program robust
-
   use general
   use genetic
   use neighboring
@@ -14,7 +13,7 @@ program robust
   implicit none
   real*8 :: fithc, ifithc, mefithc, emd                                                       !!>> HC 3-7-2023
   real*8 :: osfithc, otfithc, offithc, stfithc, sffithc, tffithc, symch                       !!>> HC 26-11-2020
-  character*140 :: onetwin                                         !!>> HC 26-11-2020    
+  character*140 :: onetwin, comando                                                           !!>> AL 19-4-2024    
   integer ::  ihc, jhc, khc, nnodes, naltech, surface, volume, outside, total, inside, differ, centrow
   integer ::  iihc,jjhc,kkhc, ord1, ord2, ord3, lhc, prev, changes, mhc, nhc, neich, neichi, newdots, vhc, phc
   real*8, dimension(1:3) ::  u
@@ -22,7 +21,8 @@ program robust
   real*8 :: maxx, minx, maxy, miny, maxz, minz, maxadd, minadd, anchx, anchy, anchz, anchadd, totmax, totmin, totanch
   real*8, allocatable, dimension(:,:) :: ncoords
   integer, allocatable, dimension(:,:,:) :: bfillz
-  fithc=0.0d0; ifithc=0.0d0 ; mefithc=0.0d0                                                   !!>> HC 26-11-2020
+  logical :: existes                                                                          !!>> AL 19-4-24
+  fithc=0.0d0; ifithc=100.0d0 ; mefithc=0.0d0                                                   !!>> HC 26-11-2020
   osfithc=0.0d0; otfithc=0.0d0; offithc=0.0d0; stfithc=0.0d0; sffithc=0.0d0; tffithc=0.0d0    !!>> HC 26-11-2020
   distfitscale=2.250d0; distfitmag=1.0d0
   call getarg(1,onetwin)
@@ -219,27 +219,34 @@ else                                                                            
    symch=666.0d0                                                                          !!>> HC 4-3-2024
 endif                                                                                     !!>> HC 4-3-2024
   
-                                             !!>> HC 30-11-2020
-
   open(777,file="Euclidean_dist.dat")
   write(777,*) "symmetry", symch                     !!>> HC 26-11-12020
   close(777)
 
-  open(888,file="individual.datfitness")             !!>> HC 3-7-2023
-  read(888,*) ifithc!, emd                            !!>> HC 3-7-2023
-  close(888)                                         !!>> HC 3-7-2023
+  inquire(file="individual.datfitness", exist=existes)         !!>> AL 19-4-24
+   if(existes)then                                             !!>> AL 19-4-24 Not sure why sometimes this file is not created but doing this is a quick and dirty 
+      open(888,file="individual.datfitness")                   !!>> AL 19-4-24 way of avoiding it... 
+      read(888,*) ifithc!, emd                                 !!>> AL 19-4-24
+      close(888)                                               !!>> AL 19-4-24
+   else                                                        !!>> AL 19-4-24
+      open(888,file="individual.datfitness")                   !!>> AL 19-4-24 way of avoiding it... 
+         write(888,*) 1000                                !!>> AL 19-4-24
+      close(888)
+      comando = "echo '[robust.f90]: no habia fichero fitness!!"      !!>> AL 19-4-24
+      call system(comando)                                     !!>> AL 19-4-24
+   end if                                                      !!>> AL 19-4-24
   
   call system("rm individual.datfitness")            !!>> HC 20-12-2020
-  if (symch<0.1500d0) then          !!>> HC 20-12-2020 We only want robust individuals
+  if (symch<0.0500d0) then                           !!>> HC 20-12-2020 We only want robust individuals
      fithc=ifithc                                    !!>> HC 20-12-2020 The threshold comes my observations
   else                                               !!>> HC 20-12-2020  
-     fithc=0.0010d0                                  !!>> HC 20-12-2020 Avoid extintion
+     fithc=1000                                      !!>> HC 20-12-2020 Avoid extintion
   endif                                              !!>> HC 20-12-2020
-  if(fithc .le. 0.0d0) fithc=0.001
+  if(fithc .le. 0.0d0) fithc=1000
 !  print*, "NEW FITNESS", fithc                      !!>> HC 30-11-2020
   
   open(888,file="individual.datfitness")             !!>> HC 3-7-2023
-      write(888,*) fithc!, emd                        !!>> HC 3-7-2023
+      write(888,*) fithc!, emd                       !!>> HC 3-7-2023
   close(888)                                         !!>> HC 3-7-2023
   open(888,file="rob.val")                           !!>> HC 26-11-12020
        write(888,*) symch                            !!>> HC 26-11-12020
