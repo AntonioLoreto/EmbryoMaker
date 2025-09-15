@@ -1,0 +1,28 @@
+THIS IS A FILE WITH EVOLUTIONARY PARAMETERS, READ BY READ_EVAPARAM IN MUTATION.MOD.F90
+3d-2	#IS mutation rate
+1d-1	#magnitude of the IS mutation in % of the original value
+6d-3	#T mutation that changes W: gain (per-gene)
+3.5d-3	#T mutation that changes W: per-interaction prob of enhancer loss
+0d0	#T mutation that changes ww
+2d-3	#T mutation that changes wa
+2d-3	#T mutation that changes kadh
+2d-2	#magnitude of the T mutation in % of the original value
+1d-3	#gene dupdel rate	
+0.d0	#mutation rate to get a new form, or to lose an existing form
+1.0	#scales the height of the hill function for fitness due to morph distance
+2.25	#scales the slope of the hill function for fitness due to morph distance
+" "
+3292    # nr of nodes ##AL 6-3-24>> this might be deprecated
+# Functions used to calculate fitness (1=ON)
+10   	# number of them
+1   	# 1 OPC
+0   	# 2 Global complexity. Joint entropy using the 4th original neighbors (needs them to be pre-calculated)
+0   	# 3 Local complexity. Joint entropy using the 1st and 2nd neighbors 
+0   	# 4 Combined complexity. Local*global
+0   	# 5 Decreasing flux resistance
+0   	# 6 Incresing flux resistance
+0   	# 7 surface/volume
+0    	# 8 half 0 incresing flux half decreasing flux resistance
+0   	# 9 Curvature patch count (CPC)
+0   	# 10 Directional selection
+        #AL 6-3-24>> Aqui agregas la tuya
