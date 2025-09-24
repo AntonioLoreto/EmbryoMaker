@@ -617,11 +617,11 @@ program substitute
       open(1,file=trim(allfin))                                  !!>> HC 21-11-2020 
          write(1,*) "This is the end, all the individuals have run"  !!>> HC 21-11-2020   
       close(1)                                                   !!>> HC 21-11-2020 
-      !!>> AL 16-4-25: we erease all /running & /population folders because of file limited space in Picassso HPC
-      command = "rm -r "//trim(running)
-      call system(trim(command))
-      command = "rm -r "//trim(population)
-      call system(trim(command))
+      ! !!>> AL 16-4-25: we erease all /running & /population folders because of file limited space in Picassso HPC 
+      ! command = "rm -r "//trim(running)                        !!AL 24-9-10: commented 
+      ! call system(trim(command))
+      ! command = "rm -r "//trim(population)
+      ! call system(trim(command))
    endif                                                         !!>> HC 21-11-2020 
 
    stop
