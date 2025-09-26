@@ -3574,4 +3574,367 @@ subroutine traits_with_proyections_CS(fitelli) !AL 11-11-24
 
 end subroutine traits_with_proyections_CS
 
+subroutine intersection(neigh0,neigh1,neigh2,Tr,res,intrs)
+   ! Inputs
+   integer, intent(in) :: neigh0, neigh1, neigh2
+   real(8), intent(in) :: Tr(3)
+   ! Outputs
+   integer, intent(out) :: res
+   real(8), intent(out) :: intrs(3)
+
+   ! Locals
+   real(8) :: p0(3),p1(3),p2(3),lab(3),p01(3),p02(3),sc1,sc2
+   real(8) :: t,u,v,cr1(3),cr(3)
+
+   ! Möller–Trumbore ray–triangle intersection algorithm
+   p0(1) = node(neigh0)%x; p0(2) = node(neigh0)%y; p0(3) = node(neigh0)%z
+   p1(1) = node(neigh1)%x; p1(2) = node(neigh1)%y; p1(3) = node(neigh1)%z
+   p2(1) = node(neigh2)%x; p2(2) = node(neigh2)%y; p2(3) = node(neigh2)%z
+
+   p01(1)=p1(1) - p0(1); p01(2)=p1(2) - p0(2); p01(3)=p1(3) - p0(3)
+   p02(1)=p2(1) - p0(1); p02(2)=p2(2) - p0(2); p02(3)=p2(3) - p0(3)
+   
+   ! intersection between Tr and plane formed by p0,p1,p2 is given by lab*t
+
+   !p01 x p02 = n (plane normal)
+   cr(1)=p01(2)*p02(3) - p01(3)*p02(2)
+   cr(2)=p01(3)*p02(1) - p01(1)*p02(3)
+   cr(3)=p01(1)*p02(2) - p01(2)*p02(1)
+
+   sc1 = dot_product(-p0,cr)
+   sc2 = dot_product(-Tr,cr)
+
+   !if sc2 = 0 then the plane is parallel or (maybe) collinear to trait direction
+   if(sc2 .eq. 0)then 
+      print*,"WARNING: no interesection"
+      res = 0
+      open(616,file="nointeresection.dat") !AL: 25-9-25 
+         write(616,*) "nointeresection.dat"   
+      close(616)
+   end if 
+
+   t = sc1/sc2
+   intrs = t*Tr
+
+   !getting u 
+   !p02 x -Tr
+   cr1(1)=p02(2)*-Tr(3) - p02(3)*-Tr(2)
+   cr1(2)=p02(3)*-Tr(1) - p02(1)*-Tr(3)
+   cr1(3)=p02(1)*-Tr(2) - p02(2)*-Tr(1)
+
+   sc1 = dot_product(-p0,cr1)
+   sc2 = dot_product(-Tr,cr)
+   
+   u = sc1/sc2
+
+   !getting v
+   !-Tr x p01
+   cr1(1)=Tr(2)*-p01(3) - Tr(3)*-p01(2)
+   cr1(2)=Tr(3)*-p01(1) - Tr(1)*-p01(3)
+   cr1(3)=Tr(1)*-p01(2) - Tr(2)*-p01(1)
+
+   sc1 = dot_product(-p0,cr1)
+   sc2 = dot_product(-Tr,cr)
+   
+   v = sc1/sc2
+
+   if(((u + v) .le. 1) .and. (u >= 0.d0 .and. u <= 1.d0 .and. v >= 0.d0 .and. v <= 1.d0))then
+      !print*,"TRIANGULO!"
+      res = 1
+   else if (u >= 0.d0 .and. u <= 1.d0 .and. v >= 0.d0 .and. v <= 1.d0) then
+      !print*,"PARALELOGRAMO!"
+      res = 2
+   else
+      res = 0
+   end if
+
+   return 
+
+end subroutine intersection
+
+subroutine traits_intersection(fitelli) !AL 25-9-25
+
+   implicit none 
+
+   logical :: signo,triangulo
+   integer :: ihc,jhc,khc,lhc,mhc,nhc,whc,contador,contadora,vecino,idd,neigh0,neigh1,neigh2
+   integer :: mini_nd(26),res,cou
+   real*8  :: size_box,maxx,maxy,maxz,totmax,linex,liney,linez,comp,t,dot_PA,dot_vv,dlta,sumdist
+   real*8  :: x0(3),x2(3),maxii(3),dire(3),projection(3),this(3),closest_projection(3),distances(26)
+   real*8  :: traits_morpho(26,3),centroidx,centroidy,centroidz,suma,CS,dis,t_prom,t0
+   real*8  :: p0(3),p1(3),p2(3),Tr(3),intrs(3),mag,fitelli
+   character*152 :: path
+   real, allocatable, dimension(:,:) :: nudos,nodos_ep,nudos1
+   real, dimension(26,8) :: nudos_gud
+   real*8, dimension(14,3) :: optimum_traits, target_traits
+   real*8, dimension(14)   :: trait_magnitudes
+
+   !>>AL 12-9-2024 Centroid
+   centroidx = 0;centroidy = 0;centroidz = 0
+   do ihc=1,nd
+      centroidx = centroidx + node(ihc)%x
+      centroidy = centroidy + node(ihc)%y
+      centroidz = centroidz + node(ihc)%z
+   end do
+   
+   centroidx = centroidx/nd
+   centroidy = centroidy/nd
+   centroidz = centroidz/nd
+   
+   !centering morpho around cero
+   do ihc=1,nd
+      node(ihc)%x = node(ihc)%x - centroidx
+      node(ihc)%y = node(ihc)%y - centroidy
+      node(ihc)%z = node(ihc)%z - centroidz
+   end do 
+
+   !Generate the lines wich represent trait directions 
+   maxx=0.0d0; maxy=0.0d0; maxz=0.0d0
+   do ihc=1,nd
+      if(abs(node(ihc)%x)>maxx) maxx=abs(node(ihc)%x)
+      if(abs(node(ihc)%y)>maxy) maxy=abs(node(ihc)%y)
+      if(abs(node(ihc)%z)>maxz) maxz=abs(node(ihc)%z)
+   end do
+
+   totmax=0.0d0
+   totmax=maxx
+   if (maxy>totmax) totmax=maxy
+   if (maxz>totmax) totmax=maxz
+
+   totmax = totmax + 0.1*totmax !with this value we'll generate the trait lines. They will be always longer than the morphology
+   
+   dlta=nodeo(1)%add*2                             !AL 19-3-25 nodeo%add is node%add at dev. time = 0, so it is always the same
+   traits_morpho = 0
+   contadora = 0
+   do ihc = 1,-1,-1
+      do jhc = 1,-1,-1
+         do khc = 1,-1,-1
+         if(ihc==0 .and. jhc==0 .and. khc==0)cycle
+            contadora = contadora + 1
+            !with the point in x2 we generate the trait direction vector, which is (x2 - 0)
+
+            x2(1)= totmax*ihc 
+            x2(2) = totmax*jhc
+            x2(3) = totmax*khc
+ 
+            contador = 0
+            cou = 0
+            dire = x2/sqrt(sum(x2**2)) !direction of trait vector 
+            
+            do lhc=1,nd                                  !Count how many apical epithelial nodes there are
+               if(node(lhc)%tipus.ne.1)cycle             !only consider apical epithelial nodes
+
+               x0(1) = node(lhc)%x; x0(2) = node(lhc)%y; x0(3) = node(lhc)%z
+
+               if(ihc .ne. 0 ) then                       !only consider nodes in the same octant as direction vector
+                  signo = (sign(x0(1), x2(1)) .eq. x0(1)) !this is true if x0 and x1 have same sign
+                  if(.not. signo)cycle
+               end if
+               if(jhc .ne. 0 ) then
+                  signo = (sign(x0(2), x2(2)) .eq. x0(2))
+                  if(.not. signo)cycle
+               end if
+               if(khc .ne. 0 ) then
+                  signo = (sign(x0(3), x2(3)) .eq. x0(3))
+                  if(.not. signo)cycle
+               end if
+
+               t = dot_product(dire,x0)                   !distance between 0 and projection of x0 on the line x2 (scalar projection)
+               projection = t*dire                        !projection vector of point x on trait direction, the magnitud will be trait value in case of closest and furthest point to trait line
+               this = projection - x0
+               
+               if(sqrt(sum(this**2)) > dlta) cycle       !magnitude of vector from projection vector to node coordinate vector (how far away from the direction is the node in consideration)
+               contador = contador + 1
+
+               neigh0 = lhc
+               Tr = x2
+
+               do mhc = 1,nneigh(neigh0)                       !AL> this tells you how many neighbours lhc has.
+                  neigh1 = neigh(neigh0,mhc)                    !AL> this tells you the node number of neighbours
+                  if(node(neigh1)%tipus.ne.1)cycle
+                  do nhc = mhc+1,nneigh(neigh0)
+                     neigh2 = neigh(neigh0,nhc) 
+                     if(node(neigh2)%tipus.ne.1)cycle
+                     
+                     res = 0
+                     call intersection(neigh0,neigh1,neigh2,Tr,res,intrs)
+
+                     if(res == 1 .or. res == 2) cou = cou + 1
+
+                  end do 
+               end do
+            end do
+
+            allocate(nudos(cou,5))
+            allocate(nudos1(cou,3))
+
+            cou = 0
+            do lhc=1,nd                                  !Count how many apical epithelial nodes there are
+               if(node(lhc)%tipus.ne.1)cycle             !only consider apical epithelial nodes
+
+               x0(1) = node(lhc)%x; x0(2) = node(lhc)%y; x0(3) = node(lhc)%z
+
+               if(ihc .ne. 0 ) then                       !only consider nodes in the same octant as direction vector
+                  signo = (sign(x0(1), x2(1)) .eq. x0(1)) !this is true if x0 and x1 have same sign
+                  if(.not. signo)cycle
+               end if
+               if(jhc .ne. 0 ) then
+                  signo = (sign(x0(2), x2(2)) .eq. x0(2))
+                  if(.not. signo)cycle
+               end if
+               if(khc .ne. 0 ) then
+                  signo = (sign(x0(3), x2(3)) .eq. x0(3))
+                  if(.not. signo)cycle
+               end if
+
+               t = dot_product(dire,x0)                   !distance between 0 and projection of x0 on the line x2 (scalar projection)
+               projection = t*dire                        !projection vector of point x on trait direction, the magnitud will be trait value in case of closest and furthest point to trait line
+               this = projection - x0
+               
+               if(sqrt(sum(this**2)) > dlta) cycle       !magnitude of vector from projection vector to node coordinate vector (how far away from the direction is the node in consideration)
+               contador = contador + 1
+
+               neigh0 = lhc
+               Tr = x2
+
+               do mhc = 1,nneigh(neigh0)                       !AL> this tells you how many neighbours lhc has.
+                  neigh1 = neigh(neigh0,mhc)                    !AL> this tells you the node number of neighbours
+                  if(node(neigh1)%tipus.ne.1)cycle
+                  do nhc = mhc+1,nneigh(neigh0)
+                     neigh2 = neigh(neigh0,nhc) 
+                     if(node(neigh2)%tipus.ne.1)cycle
+
+                     res = 0
+                     call intersection(neigh0,neigh1,neigh2,Tr,res,intrs)
+
+                     if(res == 1 .or. res == 2) then 
+                        cou = cou + 1
+                        mag = sqrt(dot_product(intrs, intrs)) !guardar interesccion
+                        nudos(cou,1) = neigh0
+                        nudos(cou,2) = neigh1
+                        nudos(cou,3) = neigh2
+                        nudos(cou,4) = res
+                        nudos(cou,5) = mag     !test
+                        nudos1(cou,1) = intrs(1)
+                        nudos1(cou,2) = intrs(2)
+                        nudos1(cou,3) = intrs(3)
+                     end if 
+                  end do 
+               end do
+            end do 
+
+            comp = 0
+            triangulo = .false.
+
+            if(cou == 0)then
+               print*,"PELIGRO PELIGRO PELIGRO: NO HAY INTERESECCION TRIAN PARALEL"
+               open(616,file="nointeresection.dat",position="append") !AL: 25-9-25 
+                  write(616,*) "nointeresection res = 0"   
+               close(616)
+            end if 
+            do whc = 1, cou
+               if(whc == 1)then 
+                  do nhc = 1, cou                           !we prioritize triangle intersection 
+                     if(int(nudos(nhc,4)) .ne. 1)cycle 
+                     triangulo = .true.
+                     if(nudos(nhc,5) > comp) then 
+                        comp = nudos(nhc,5) 
+                        nudos_gud(contadora,1) = nudos(nhc,1)  
+                        nudos_gud(contadora,2) = nudos(nhc,2) 
+                        nudos_gud(contadora,3) = nudos(nhc,3) 
+                        nudos_gud(contadora,4) = nudos(nhc,4) 
+                        nudos_gud(contadora,5) = nudos(nhc,5)
+                        nudos_gud(contadora,6) = nudos1(nhc,1)
+                        nudos_gud(contadora,7) = nudos1(nhc,2)
+                        nudos_gud(contadora,8) = nudos1(nhc,3)
+
+                     end if
+                  end do 
+               end if 
+
+               if(triangulo .eqv. .true.) exit
+
+               if(nudos(whc,5) > comp) then 
+                  comp = nudos(whc,5) 
+                  nudos_gud(contadora,1) = nudos(whc,1)  
+                  nudos_gud(contadora,2) = nudos(whc,2) 
+                  nudos_gud(contadora,3) = nudos(whc,3) 
+                  nudos_gud(contadora,4) = nudos(whc,4) 
+                  nudos_gud(contadora,5) = nudos(whc,5)
+                  nudos_gud(contadora,6) = nudos1(nhc,1)
+                  nudos_gud(contadora,7) = nudos1(nhc,2)
+                  nudos_gud(contadora,8) = nudos1(nhc,3)
+               end if 
+
+            end do
+      
+            deallocate(nudos)
+            deallocate(nudos1)
+
+            maxii(1) = node(int(nudos_gud(contadora,1)))%x 
+            maxii(2) = node(int(nudos_gud(contadora,1)))%y
+            maxii(3) = node(int(nudos_gud(contadora,1)))%z
+
+            traits_morpho(contadora,1) = dire(1)*nudos_gud(contadora,5)
+            traits_morpho(contadora,2) = dire(2)*nudos_gud(contadora,5)
+            traits_morpho(contadora,3) = dire(3)*nudos_gud(contadora,5)
+
+         end do 
+      end do 
+   end do 
+
+   optimum_traits(1,:)  = traits_morpho(13,:)     !(0,0,+) D1 
+   optimum_traits(2,:)  = traits_morpho(11,:)     !(0,+,0) D2
+   optimum_traits(3,:)  = traits_morpho(14,:)     !(0,0,-) D3 
+   optimum_traits(4,:)  = traits_morpho(16,:)     !(0,-,0) D4
+   optimum_traits(5,:)  = traits_morpho(1,:)      !(+,+,+) D5
+   optimum_traits(6,:)  = traits_morpho(3,:)      !(+,+,-) D6
+   optimum_traits(7,:)  = traits_morpho(5,:)      !(+,0,0) D7
+   optimum_traits(8,:)  = traits_morpho(9,:)      !(+,-,-) D8
+   optimum_traits(9,:)  = traits_morpho(7,:)      !(+,-,+) D9
+   optimum_traits(10,:) = traits_morpho(18,:)     !(-,+,+) D10
+   optimum_traits(11,:) = traits_morpho(20,:)     !(-,+,-) D11
+   optimum_traits(12,:) = traits_morpho(22,:)     !(-,0,0) D12
+   optimum_traits(13,:) = traits_morpho(26,:)     !(-,-,-) D13
+   optimum_traits(14,:) = traits_morpho(24,:)     !(-,-,+) D14
+
+   !calculate centroid size 
+   suma = 0
+   do ihc=1,14
+      suma = suma + sum(optimum_traits(ihc,:)**2)
+   end do
+
+   CS = sqrt(suma)
+
+   !normalize
+   optimum_traits = optimum_traits/CS
+
+   open(10, file="target_1.dat") !this distances should be already normalized
+      do ihc = 1, 14
+        read(10, *) target_traits(ihc, 1), target_traits(ihc, 2), target_traits(ihc, 3)  ! Read each row
+      end do
+   close(10)
+   
+   dis = 0
+   do ihc = 1, 14
+      dis = dis + sqrt(sum((target_traits(ihc,:) - optimum_traits(ihc,:))**2))
+   end do
+
+   fitelli = dis
+
+   open (123, file="individual.datfitness", status="replace", action="write")
+      write(123,*) dis
+   close(123)
+
+   !save trait magnitudes
+   do ihc = 1, 14
+      trait_magnitudes(ihc) = sqrt(sum(optimum_traits(ihc,:)**2))
+   end do
+
+   open(616,file="traits_local.dat") !AL: 25-9-25 not normalized
+      write(616,*) trait_magnitudes   
+   close(616)
+
+end subroutine traits_intersection
+
 end module  

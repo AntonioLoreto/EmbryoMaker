@@ -1083,7 +1083,7 @@ return
     character*6 fmch   !!>> HC 18-6-2020 
     integer :: numdnode !!>> TT 13-7-2020
 
-    print*,"reading ..." !!>> HC 30-11-2020 Reducing prints for optimization
+    !print*,"reading ..." !!>> HC 30-11-2020 Reducing prints for optimization
     
 
 

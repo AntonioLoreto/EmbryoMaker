@@ -1334,64 +1334,71 @@ subroutine filter  !!>> HC 12-2-2021 This subroutine applies filters if the corr
     end if          
 
      !!!!!!!!!!!!!!!!!!!!!!!THIS COMES FROM ENSEMBLE MODE (HAGOLANI 2018)!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!>> HC 17-9-2020
-    !  ! WHICHEND 12: BROKEN MORPHOLOGIES   !!!!!!!!!WE HAVE TO CHECK THESE!!!!!!!!!!!!!!!!!!
-    !  if (ffufi(12,1)==1.and.ffufi(12,3)>0)then                        !!>> HC 14-12-2021
-    !     if (mod(getot,ffufi(12,3)).eq.0)then                          !!>> HC 14-12-2021
-    !        oripich=0; percent=0.0d0; many=0                           !!>> HC 24-9-2021 Here we calculate the original number of epithelial nodes
-    !        do ich=1,nd                                                !!>> HC 24-9-2021
-    !           if (nodeo(ich)%tipus.ge.3)cycle                         !!>> HC 24-9-2021 WARNING 1 we are assuming that the epitelial cells are listed BEFORE the mesenchyme
-    !           if (nodeo(ich)%icel>oripich) oripich=nodeo(ich)%icel    !!>> HC 24-9-2021 the original number of epithelial nodes is then the maximum number of epitelial cells
-    !        enddo                                                      !!>> HC 24-9-2021 in the nodeo list (WARNING 2 assuming single_node cells)
-    !        oripich=oripich*2                                          !!>> HC 14-12-2021 original number of epitelial nodes        
-    !        do ich=1,nd                                                !!>> HC 14-12-2021 We llok all the epithelial nodes
-    !           if(node(ich)%tipus.ge.3)cycle                           !!>> HC 14-12-2021
-    !           sumneigh=0                                              !!>> HC 14-12-2021
-    !           do jch=1,nneigh(ich)                                    !!>> HC 14-12-2021 Count the neighbors that are epithelial too
-    !              if(node(neigh(ich,jch))%tipus.ge.3)cycle             !!>> HC 14-12-2021
-    !              sumneigh=sumneigh+1                                  !!>> HC 14-12-2021
-    !           enddo                                                   !!>> HC 14-12-2021
-    !           if(sumneigh<3) many=many+1                              !!>> HC 14-12-2021 We consider the nodes with less than 3 neighbors broken
-    !        enddo                                                      !!>> HC 14-12-2021 (empirically calculated)
-    !        percent=real(many)/real(oripich)                           !!>> HC 14-12-2021
-    !        if (percent>0.20d0)then                                    !!>> HC 14-12-2021 This is an empirically calculated limit
-    !           whichend=12                                             !!>> HC 14-12-2021 Limit surpased, we kill this simulation
-    !           goto 171                                                !!>> HC 14-12-2021
-    !        endif                                                      !!>> HC 14-12-2021
-    !     endif                                                         !!>> HC 14-12-2021       
-    !  endif                                                            !!>> HC 14-12-2021
-!     if (ffufi(12,1)==1.and.ffufi(12,3)>0)then                                                                  !!>> HC 20-2-2021
-!        if (mod(getot,ffufi(12,3)).eq.0)then                                                                    !!>> HC 12-7-2021
-!           threshdotp=4                                                                                         !!>> TT 5-3-2021
-!           ntotbroken=0; nepi=0                                                                                 !!>> TT 5-3-2021
-!           do i=1, nd                                                                                           !!>> TT 5-3-2021
-!               if(node(i)%tipus .gt. 2)cycle                                                                    !!>> TT 5-3-2021
-!               nepi=nepi+1                                                                                      !!>> TT 5-3-2021
-!               sumdotp=0                                                                                        !!>> TT 5-3-2021
-!               uvx=node(node(i)%altre)%x-node(i)%x                                                              !!>> TT 5-3-2021
-!               uvy=node(node(i)%altre)%y-node(i)%y                                                              !!>> TT 5-3-2021
-!               uvz=node(node(i)%altre)%z-node(i)%z                                                              !!>> TT 5-3-2021
-!               di=sqrt(uvx**2+uvy**2+uvz**2)                                                                    !!>> TT 5-3-2021
-!               do j=1, nneigh(i)                                                                                !!>> HC 12-7-2021
-!                   ic=neigh(i,j)                                                                                !!>> HC 5-3-2021
-!                   if(node(ic)%tipus .ne. node(i)%tipus)cycle                                                   !!>> TT 5-3-2021
-!                   mvecx=node(ic)%x-node(i)%x                                                                   !!>> TT 5-3-2021
-!                   mvecy=node(ic)%y-node(i)%y                                                                   !!>> TT 5-3-2021
-!                   mvecz=node(ic)%z-node(i)%z                                                                   !!>> TT 5-3-2021
-!                   sumdotp=sumdotp+(mvecx*uvx+mvecy*uvy+mvecz*uvz)/di                                           !!>> TT 5-3-2021
-!                   ica=node(ic)%altre                                                                           !!>> TT 5-3-2021
-!                   mvecx=node(ica)%x-node(i)%x                                                                  !!>> TT 5-3-2021
-!                   mvecy=node(ica)%y-node(i)%y                                                                  !!>> TT 5-3-2021
-!                   mvecz=node(ica)%z-node(i)%z                                                                  !!>> TT 5-3-2021
-!                   sumdotp=sumdotp+(mvecx*uvx+mvecy*uvy+mvecz*uvz)/di                                           !!>> TT 5-3-2021
-!               end do                                                                                           !!>> TT 5-3-2021
-!               if(abs(sumdotp).gt.threshdotp)ntotbroken=ntotbroken+1                                            !!>> TT 5-3-2021
-!           end do                                                                                               !!>> TT 5-3-2021
-!           if (ntotbroken > 0.05*nepi)then                                                                      !!>> TT 5-3-2021
-!              whichend=12                                                                                            !!>> HC 17-9-2020
-!              goto 171                                                                                               !!>> HC 17-9-2020
-!           endif                                                                                                    !!>> HC 17-9-2020
-!        endif
-!     endif                                                                                                      !!>> HC 17-9-2020
+     ! WHICHEND 12: BROKEN MORPHOLOGIES   !!!!!!!!!WE HAVE TO CHECK THESE!!!!!!!!!!!!!!!!!!
+     if (ffufi(12,1)==1.and.ffufi(12,3)>0)then                        !!>> HC 14-12-2021
+        if (mod(getot,ffufi(12,3)).eq.0)then                          !!>> HC 14-12-2021
+           oripich=0; percent=0.0d0; many=0                           !!>> HC 24-9-2021 Here we calculate the original number of epithelial nodes
+           do ich=1,nd                                                !!>> HC 24-9-2021
+              if (nodeo(ich)%tipus.ge.3)cycle                         !!>> HC 24-9-2021 WARNING 1 we are assuming that the epitelial cells are listed BEFORE the mesenchyme
+              if (nodeo(ich)%icel>oripich) oripich=nodeo(ich)%icel    !!>> HC 24-9-2021 the original number of epithelial nodes is then the maximum number of epitelial cells
+           enddo                                                      !!>> HC 24-9-2021 in the nodeo list (WARNING 2 assuming single_node cells)
+           oripich=oripich*2                                          !!>> HC 14-12-2021 original number of epitelial nodes        
+           do ich=1,nd                                                !!>> HC 14-12-2021 We llok all the epithelial nodes
+              if(node(ich)%tipus.ge.3)cycle                           !!>> HC 14-12-2021
+              sumneigh=0                                              !!>> HC 14-12-2021
+              do jch=1,nneigh(ich)                                    !!>> HC 14-12-2021 Count the neighbors that are epithelial too
+                 if(node(neigh(ich,jch))%tipus.ge.3)cycle             !!>> HC 14-12-2021
+                 sumneigh=sumneigh+1                                  !!>> HC 14-12-2021
+              enddo                                                   !!>> HC 14-12-2021
+              if(sumneigh<3) many=many+1                              !!>> HC 14-12-2021 We consider the nodes with less than 3 neighbors broken
+           enddo                                                      !!>> HC 14-12-2021 (empirically calculated)
+           percent=real(many)/real(oripich)                           !!>> HC 14-12-2021
+           if (percent>0.20d0)then                                    !!>> HC 14-12-2021 This is an empirically calculated limit
+              whichend=12                                             !!>> HC 14-12-2021 Limit surpased, we kill this simulation
+              open(891, file='individual.datfitness')                                                            !!>> AL 25-4-25                     
+                write(891,*) 1000                                             
+              close(891) 
+              goto 171                                                !!>> HC 14-12-2021
+           endif                                                      !!>> HC 14-12-2021
+        endif                                                         !!>> HC 14-12-2021       
+     endif                                                            !!>> HC 14-12-2021
+    
+    if (ffufi(12,1)==1.and.ffufi(12,3)>0)then                                                                  !!>> HC 20-2-2021
+       if (mod(getot,ffufi(12,3)).eq.0)then                                                                    !!>> HC 12-7-2021
+          threshdotp=4                                                                                         !!>> TT 5-3-2021
+          ntotbroken=0; nepi=0                                                                                 !!>> TT 5-3-2021
+          do i=1, nd                                                                                           !!>> TT 5-3-2021
+              if(node(i)%tipus .gt. 2)cycle                                                                    !!>> TT 5-3-2021
+              nepi=nepi+1                                                                                      !!>> TT 5-3-2021
+              sumdotp=0                                                                                        !!>> TT 5-3-2021
+              uvx=node(node(i)%altre)%x-node(i)%x                                                              !!>> TT 5-3-2021
+              uvy=node(node(i)%altre)%y-node(i)%y                                                              !!>> TT 5-3-2021
+              uvz=node(node(i)%altre)%z-node(i)%z                                                              !!>> TT 5-3-2021
+              di=sqrt(uvx**2+uvy**2+uvz**2)                                                                    !!>> TT 5-3-2021
+              do j=1, nneigh(i)                                                                                !!>> HC 12-7-2021
+                  ic=neigh(i,j)                                                                                !!>> HC 5-3-2021
+                  if(node(ic)%tipus .ne. node(i)%tipus)cycle                                                   !!>> TT 5-3-2021
+                  mvecx=node(ic)%x-node(i)%x                                                                   !!>> TT 5-3-2021
+                  mvecy=node(ic)%y-node(i)%y                                                                   !!>> TT 5-3-2021
+                  mvecz=node(ic)%z-node(i)%z                                                                   !!>> TT 5-3-2021
+                  sumdotp=sumdotp+(mvecx*uvx+mvecy*uvy+mvecz*uvz)/di                                           !!>> TT 5-3-2021
+                  ica=node(ic)%altre                                                                           !!>> TT 5-3-2021
+                  mvecx=node(ica)%x-node(i)%x                                                                  !!>> TT 5-3-2021
+                  mvecy=node(ica)%y-node(i)%y                                                                  !!>> TT 5-3-2021
+                  mvecz=node(ica)%z-node(i)%z                                                                  !!>> TT 5-3-2021
+                  sumdotp=sumdotp+(mvecx*uvx+mvecy*uvy+mvecz*uvz)/di                                           !!>> TT 5-3-2021
+              end do                                                                                           !!>> TT 5-3-2021
+              if(abs(sumdotp).gt.threshdotp)ntotbroken=ntotbroken+1                                            !!>> TT 5-3-2021
+          end do                                                                                               !!>> TT 5-3-2021
+          if (ntotbroken > 0.05*nepi)then                                                                      !!>> TT 5-3-2021
+            open(891, file='individual.datfitness')                                                            !!>> AL 25-4-25                     
+              write(891,*) 1000                                             
+            close(891) 
+             whichend=12                                                                                            !!>> HC 17-9-2020
+             goto 171                                                                                               !!>> HC 17-9-2020
+          endif                                                                                                    !!>> HC 17-9-2020
+       endif
+    endif                                                                                                      !!>> HC 17-9-2020
     
     !! WHICHEND 12: BROKEN MORPHOLOGIES   !!!!!!!!!WE HAVE TO CHECK THESE!!!!!!!!!!!!!!!!! !!>> AL 11-4-25: The code above doesn't work. I will just make my own filter
     if (ffufi(12,1)==1.and.ffufi(12,3)>0)then                        

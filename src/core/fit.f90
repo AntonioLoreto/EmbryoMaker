@@ -80,7 +80,8 @@ program fitness
       if (effu(10)==1) call directional_selection(fitelli)                      !!>> HC 18-2-2024  Directional selection (works)
       if (effu(11)==1) call complexity(fitelli, volumenes)                      !!>> AL 12-3-2024
       if (effu(12)==1) call traits_with_proyections_CS(fitelli)                 !!>> AL 7-3-2025
-      
+      if (effu(13)==1) call traits_intersection(fitelli)                 !!>> AL 7-3-2025
+
       !!!OUTPUT!!!
       if (effu(1)==0)then
          open(202,file="individual.datfitness")                              !!>> HC 11-11-2021 WRITING OUTPUT

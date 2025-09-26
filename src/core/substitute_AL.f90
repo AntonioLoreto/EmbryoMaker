@@ -1,6 +1,7 @@
 program substitute
    
    implicit none
+
    logical         :: exist
    integer         :: i, j, nsubs, nmax, npop, theone, todie, thechosen,thechosen_recombinator,nseed,nminfits,largo,nrecs,recnum
    integer         :: donorsubnum, errorr,inter,waittime,iniwaittime
@@ -118,7 +119,7 @@ program substitute
    close(836)                      
    !***************************************************************************! 
 
-   !> AL 20-1-25: Error handling. If some of the next files doesnt exist for whatever mysterious reason, we totally ignore this subs.  
+   !> AL 20-1-25: Error handling. If some of the next files don't exist for whatever mysterious reason, we totally ignore this substitution.  
    errorr = 0
    call check_file(counter_subs,errorr)
    call check_file(parent,errorr)
@@ -138,6 +139,7 @@ program substitute
    open(6021, file=trim(datfitness))
       read(6021, *) indfit
    close(6021)
+
    !print *,"[substitute_AL.sh]: this is fitness inside individual.datfitness ", indfit
 
    open(1,file=trim(popsize))                               !!>> HC 21-11-2020
@@ -231,7 +233,7 @@ program substitute
       !— now you can use last_most_fit
       waittime = numm*2
       if((nsubs-numm)>waittime.and.(last_most_fit-last_most_fit*u) <= indfit)nsubs=nmax !the last condition is redundant since no morfs with less distance than this treshold are saved
-19     continue
+   19 continue
    end if
 
    if (nsubs .le. nmax) then                                !!>> HC 21-11-2020 IF there are still substitutions to do  
@@ -355,33 +357,26 @@ program substitute
                besty = trim(bindir)//"/best/individual"//trim(id)//"-"//trim(mostfit)//".dat"       !!>> HC 21-11-2020
             
                cp = "cp "//trim(datfin)//" "//trim(besty)                       !!>> HC 21-11-2020
-               call system(trim(cp))                                          !!>> HC 21-11-2020 save it in the "best" directory
-            endif                                                             !!>> HC 21-11-2020
+               call system(trim(cp))                                            !!>> HC 21-11-2020 save it in the "best" directory
+            endif                                                               !!>> HC 21-11-2020
          else 
-            if (indfit < minfit)then                                            !!>> HC 21-11-2020 This individual has a maximum fitness value
-            
+            if (indfit < minfit)then                                            
                best = trim(bindir)//"/best"                                     !!>> HC 21-11-2020
                write(id,'(I6.6)') nsubs                                         !!>> HC 21-11-2020
                write(mostfit,'(F6.4)') indfit                                   !!>> HC 21-11-2020
-               
                do i = 1, len(mostfit)
                   if (mostfit(i:i) == '.') mostfit(i:i) = '_'
                end do
-               
                besty = trim(bindir)//"/best/individual"//trim(id)//"-"//trim(mostfit)//".dat"       !!>> HC 21-11-2020
-            
                cp = "cp "//trim(datfin)//" "//trim(besty)                       !!>> HC 21-11-2020
                call system(trim(cp))                                          !!>> HC 21-11-2020 save it in the "best" directory
             endif                                                             !!>> HC 21-11-2020
          end if 
-      
       else                                                                 !!>> HC 21-11-2020 THIS INDIVIDUAL IS NOT BETTER THAN THE WORST IN THE POPULATION
-
 90909    continue
          open(1,file=trim(idfile))                                         !!>> HC 21-11-2020
-            write(1,*) "          NA"                                      !!>> HC 21-11-2020 NA means this individual has been discarded !!AL 13-11-24: because fitness was not better thatn the worst one
+            write(1,*) "          NA"                                      !!>> HC 21-11-2020 NA means this individual has been discarded !!AL 13-11-24: because fitness was not better thatn the worst one or developmental time less than 1
          close(1)                                                          !!>> HC 21-11-2020
-
       endif                                                                !!>> HC 21-11-2020
       
       !paste = "paste "//trim(counter_subs)//" "//trim(idfile)//" "//trim(parent)//" "//trim(datfitness)//" "// &

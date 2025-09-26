@@ -75,6 +75,9 @@ gfortran -w -O2 -g general.mod.o genetic.mod.o io.mod.o recombination.mod.o reco
 echo 'linking gfit.e'
 gfortran -w -fexceptions -fno-underscoring -O2 -fbounds-check general.mod.f90 neighboring.mod.f90 genetic.mod.f90 io.mod.f90 geompack3.f90 get_fitness_traitsCS.f90 -o gfit.e
 
+echo 'fitatstart'
+gfortran general.mod.f90 genetic.mod.f90  io.mod.f90  geompack3.f90 neighboring.mod.f90 analysis.mod.f90 fitatstart.f90 -o fitatstar.e
+
 #cleaning
 echo 'cleaning'
 rm *.s *.o *.mod
@@ -92,6 +95,7 @@ mv src/core/complexityatstart.e bin
 mv src/core/rec1.e bin
 mv src/core/rec2.e bin
 mv src/core/gfit.e bin
+mv src/core/fitatstar.e bin
 
 cd bin
 

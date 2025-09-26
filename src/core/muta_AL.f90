@@ -126,13 +126,13 @@ program mutar
             end if
 
             inquire(file = "mutacodetmp.dat", exist = exist)              !!>> AL 27-1-25            
-            if (inviable == 1) then                                    !!>> HC 8-9-2020
+            if (inviable == 1) then                                    
                open(666, file="inviable.e")
-                  write(666,*) "Blood and tears"                        !!>>HC 24-11-2020
+                  write(666,*) "Blood and tears"                        
                close(666)
-               open(777, file="mutacodetmp.dat")                        !!>>HC 16-9-2021
-                  write(777,*) " 666 666 666 0 0 0 0 0" !!>>HC 16-9-2021
-               close(777)                                            !!>>HC 16-9-2021        
+               open(777, file="mutacodetmp.dat")                        
+                  write(777,*) " 666 666 666 0 0 0 0 0" 
+               close(777)                                                 
             else
                if (exist) then
                   !print*,ich

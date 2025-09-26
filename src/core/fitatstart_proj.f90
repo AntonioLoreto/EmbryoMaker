@@ -1,5 +1,6 @@
 program proj_fit
 ! gfortran general.mod.f90 genetic.mod.f90  io.mod.f90  geompack3.f90 neighboring.mod.f90 fitatstart_proj.f90 -o fitatstartproj.e
+   
    use io
    use general
    use genetic
