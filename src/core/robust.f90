@@ -219,39 +219,20 @@ else                                                                            
    symch=666.0d0                                                                          !!>> HC 4-3-2024
 endif                                                                                     !!>> HC 4-3-2024
   
-  open(777,file="Euclidean_dist.dat")
-  write(777,*) "symmetry", symch                     !!>> HC 26-11-12020
-  close(777)
 
-  inquire(file="individual.datfitness", exist=existes)         !!>> AL 19-4-24
-   if(existes)then                                             !!>> AL 19-4-24 Not sure why sometimes this file is not created but doing this is a quick and dirty 
-      open(888,file="individual.datfitness")                   !!>> AL 19-4-24 way of avoiding it... 
-      read(888,*) ifithc!, emd                                 !!>> AL 19-4-24
-      close(888)                                               !!>> AL 19-4-24
-   else                                                        !!>> AL 19-4-24
-      open(888,file="individual.datfitness")                   !!>> AL 19-4-24 way of avoiding it... 
-         write(888,*) 1000                                !!>> AL 19-4-24
-      close(888)
-      comando = "echo '[robust.f90]: no habia fichero fitness!!"      !!>> AL 19-4-24
-      call system(comando)                                     !!>> AL 19-4-24
-   end if                                                      !!>> AL 19-4-24
-  
-  call system("rm individual.datfitness")            !!>> HC 20-12-2020
-  if (symch<0.0500d0) then                           !!>> HC 20-12-2020 We only want robust individuals
-     fithc=ifithc                                    !!>> HC 20-12-2020 The threshold comes my observations
-  else                                               !!>> HC 20-12-2020  
-     fithc=1000                                      !!>> HC 20-12-2020 Avoid extintion
-  endif                                              !!>> HC 20-12-2020
-  if(fithc .le. 0.0d0) fithc=1000
-!  print*, "NEW FITNESS", fithc                      !!>> HC 30-11-2020
-  
-  open(888,file="individual.datfitness")             !!>> HC 3-7-2023
-      write(888,*) fithc!, emd                       !!>> HC 3-7-2023
-  close(888)                                         !!>> HC 3-7-2023
-  open(888,file="rob.val")                           !!>> HC 26-11-12020
-       write(888,*) symch                            !!>> HC 26-11-12020
-  close(888)                                         !!>> HC 26-11-12020
-  
+!   open(777,file="Euclidean_dist.dat")
+!   write(777,*) "symmetry", symch                     !!>> HC 26-11-12020
+!   close(777)
+
+  if (symch > 0.0500d0) then                         !!>> HC 20-12-2020 We only want robust individuals
+      open(888,file="individual.datfitness")             
+            write(888,*) 1000                   
+      close(888)                                                                                       
+  end if 
+
+   open(888,file="rob.val")                           !!>> HC 26-11-12020
+         write(888,*) symch                            !!>> HC 26-11-12020
+   close(888)                                         !!>> HC 26-11-12020
   
 
 end program robust

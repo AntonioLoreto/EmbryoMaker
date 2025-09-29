@@ -3935,6 +3935,11 @@ subroutine traits_intersection(fitelli) !AL 25-9-25
       write(616,*) trait_magnitudes   
    close(616)
 
+   open (124, file="individual.volume.txt") !AL: 29-9-25 this shouldn't be necessary but haven't had time to change
+      write(124,*) 0.0
+   close(124)
+
+
 end subroutine traits_intersection
 
 end module  

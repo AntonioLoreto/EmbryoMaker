@@ -54,7 +54,7 @@ running="${workdir}/running"
 robustatstart="${workdir}/assymetryatstart.e"      # AL 15-4-24>> Robust at start
 #complexityatstart="${workdir}/complexityatstart.e"  # AL 15-4-24>> Complexity at start
 target="${workdir}/target_1.dat"
-
+developed_ico="${workdir}/chidatttico_evo.dat8209.dat"
 
 # Create necessary directories if they don't exist, and print a warning if they already exist
 for dir in "${workdir}/best" "${workdir}/finished" "${workdir}/population" "${workdir}/running"; do
@@ -71,9 +71,10 @@ echo "    subs    |    individ    |    parent_subs    |    parent    |    fitnes
 
 #./fitatstartproj.e icoepi_nuclei_24G.dat10000.dat target_1.dat
 
-./get_fit_onlytraits.e chidatttico_evo.dat8209.datnormalizedtraits.txt target_1.dat #AL 19-5-25 
+./fitatstar.e $developed_ico target_1.dat #AL 19-5-25 
+initialfitness=$(cat fitnessatstart.dat)
 
-echo "  0   0   0   0    $(cat fitnessatstart.dat)  0   0   0   0   0   " >> "${workdir}/output_model.dat"
+echo "  0   0   0   0    $initialfitness  0   0   0   0   0   " >> "${workdir}/output_model.dat"
 
 # Set up directories and files for running individuals
 for (( i = 1; i <= ncpus; i++ )); do
@@ -95,12 +96,13 @@ for (( i = 1; i <= nsize; i++ )); do
 done
 
 # AL 15-4-24: Uncomment if necessary
-# $robustatstart "$startfile"
+ $robustatstart $developed_ico
 # $complexityatstart "$startfile"
 
 #asymmetry and fitness data
 for (( i = 1; i <= nsize; i++ )); do
     paste assymetryatstart.dat fitnessatstart.dat -d " " >> fitnassy.txt    # AL 15-4-24
+    echo "$initialfitness" >> "${population}/population.datfitness"
 done
 mv fitnassy.txt "${population}/fitnassy.txt"  # AL 15-4-24: This will be used for inheritance of fitness and asymmetry
 

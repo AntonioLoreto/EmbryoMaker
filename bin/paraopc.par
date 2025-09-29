@@ -13,8 +13,8 @@ THIS IS A FILE WITH EVOLUTIONARY PARAMETERS, READ BY READ_EVAPARAM IN MUTATION.M
 2.25	#scales the slope of the hill function for fitness due to morph distance
 " "
 3292    # nr of nodes ##AL 6-3-24>> this might be deprecated
-# Functions used to calculate fitness (1=ON)
-12   	# number of them
+# Which fitness function? (1=ON)
+13   	# number of them
 0   	# 1 OPC
 0   	# 2 Global complexity. Joint entropy using the 4th original neighbors (needs them to be pre-calculated)
 0   	# 3 Local complexity. Joint entropy using the 1st and 2nd neighbors 
