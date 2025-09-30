@@ -3658,7 +3658,7 @@ subroutine traits_intersection(fitelli) !AL 25-9-25
 
    logical :: signo,triangulo
    integer :: ihc,jhc,khc,lhc,mhc,nhc,whc,contador,contadora,vecino,idd,neigh0,neigh1,neigh2
-   integer :: mini_nd(26),res,cou
+   integer :: mini_nd(26),res,cou,warng
    real*8  :: size_box,maxx,maxy,maxz,totmax,linex,liney,linez,comp,t,dot_PA,dot_vv,dlta,sumdist
    real*8  :: x0(3),x2(3),maxii(3),dire(3),projection(3),this(3),closest_projection(3),distances(26)
    real*8  :: traits_morpho(26,3),centroidx,centroidy,centroidz,suma,CS,dis,t_prom,t0
@@ -3668,7 +3668,9 @@ subroutine traits_intersection(fitelli) !AL 25-9-25
    real, dimension(26,8) :: nudos_gud
    real*8, dimension(14,3) :: optimum_traits, target_traits
    real*8, dimension(14)   :: trait_magnitudes
-
+   
+   warng = 0 !AL 30-9-25
+   
    !>>AL 12-9-2024 Centroid
    centroidx = 0;centroidy = 0;centroidz = 0
    do ihc=1,nd
@@ -3765,6 +3767,13 @@ subroutine traits_intersection(fitelli) !AL 25-9-25
                end do
             end do
 
+            if(cou == 0)then
+               warng = 1
+               open(616,file="nointeresection.dat",position="append") !AL: 25-9-25 
+                  write(616,*) "nointeresection res = 0"   
+               close(616)
+            end if 
+
             allocate(nudos(cou,5))
             allocate(nudos1(cou,3))
 
@@ -3826,12 +3835,6 @@ subroutine traits_intersection(fitelli) !AL 25-9-25
             comp = 0
             triangulo = .false.
 
-            if(cou == 0)then
-               print*,"PELIGRO PELIGRO PELIGRO: NO HAY INTERESECCION TRIAN PARALEL"
-               open(616,file="nointeresection.dat",position="append") !AL: 25-9-25 
-                  write(616,*) "nointeresection res = 0"   
-               close(616)
-            end if 
             do whc = 1, cou
                if(whc == 1)then 
                   do nhc = 1, cou                           !we prioritize triangle intersection 
@@ -3921,6 +3924,7 @@ subroutine traits_intersection(fitelli) !AL 25-9-25
    end do
 
    fitelli = dis
+   if(warng == 1) dis = 666.666
 
    open (123, file="individual.datfitness", status="replace", action="write")
       write(123,*) dis
@@ -3938,7 +3942,6 @@ subroutine traits_intersection(fitelli) !AL 25-9-25
    open (124, file="individual.volume.txt") !AL: 29-9-25 this shouldn't be necessary but haven't had time to change
       write(124,*) 0.0
    close(124)
-
 
 end subroutine traits_intersection
 
